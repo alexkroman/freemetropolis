@@ -1,0 +1,29 @@
+TextilePHP
+CHANGELOG
+@(#) $Id: CHANGELOG,v 1.1.2.2 2004/07/28 16:08:41 jhriggs Exp $
+
+2004-07-28
+  - release 2.0.4/2004072800
+  - Textile.php: updated for (non-strict) PHP5-compliance
+
+2004-06-03
+  - release 2.0.3/2004060300
+  - Textile.php: fixed bullet default macro (fixes bug 52)
+
+2004-05-28
+  - release 2.0.2/2004052800
+  - Textile.php: added MTLikeTextile class that produces output more
+    like that of the mttextile plugin, including SmartyPants and the
+    special lookup links; code-highlighting with Beautifier not yet
+    implemented (special lookup links further address bug 43 reported
+    by Adam Gessaman)
+  - TODO: added note to implement code-highlighting with Beautifier to
+    MTLikeTextile
+
+2004-05-25
+  - release 2.0.1/2004052500
+  - Textile.php: fixed link lookup lists (fixes bug 43 reported by
+    Adam Gessaman)
+
+2004-05-23
+  - initial release 2.0/2004052300

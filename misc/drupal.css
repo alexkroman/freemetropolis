@@ -1,0 +1,419 @@
+/* $Id: drupal.css,v 1.6 2004/10/25 03:11:05 alex Exp $ */
+
+/*
+** Menu styles
+*/
+.menu {
+	padding: 0 0 0 0.1em;
+}
+
+.menu ul {
+	margin:0px;
+ padding:7px;
+  list-style: none;
+  border: none;
+  text-align:left;
+}
+.menu li a {
+  width: 100%;
+  text-decoration: none;
+}
+li.expanded {
+  list-style-type: circle;
+  list-style-image: url(menu-expanded.gif);
+  padding: 0 0.2em 0 0;
+  margin: 0;
+}
+li.collapsed {
+  list-style-type: disc;
+  list-style-image: url(menu-collapsed.gif);
+  padding: 0.1em 0.5em 0 0;
+  margin: 0;
+}
+li.leaf {
+  list-style-type: square;
+  list-style-image: url(menu-leaf.gif);
+  padding: 0em 0.1em 0 0;
+  margin: 0;
+}
+li a.active {
+  color: #000;
+}
+td.menu-disabled {
+  background: #ccc;
+}
+
+
+form {
+  margin: 0;
+  padding: 0;
+}
+th {
+  text-align: left;
+  padding-right: 1em;
+  border-bottom: 1px solid #8E5E57;
+}
+fieldset {
+  margin-bottom: 1em;
+  padding: .5em;
+}
+img {
+  border: 0;
+}
+
+#tracker table {
+  border-collapse: collapse;
+}
+#tracker td {
+  vertical-align: top;
+  padding: 1em;
+}
+#tracker td ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+#tracker td ul a {
+  font-weight: normal;
+}
+#tracker th {
+  text-align: left;
+  padding: 0.25em 1em 0.25em 0em;
+}
+
+ table {
+  border-collapse: collapse;
+}
+ td {
+  vertical-align: top;
+  padding: 1em;
+}
+
+td.blog {
+  vertical-align: top;
+  padding: 0px;
+}
+ td ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+ td ul a {
+  font-weight: normal;
+}
+ th {
+  text-align: left;
+  padding: 0.25em 1em 0.25em 0em;
+}
+
+
+#forum table {
+  border-collapse: collapse;
+}
+#forum td {
+  vertical-align: top;
+  padding: 1em;
+}
+#forum td ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+#forum td ul a {
+  font-weight: normal;
+}
+#forum th {
+  text-align: left;
+  padding: 0.25em 1em 0.25em 0em;
+}
+
+#pager {
+  text-align: center;
+}
+#pager div {
+  padding: 0.5em;
+}
+.breadcrumb {
+	font-size: 12px;
+  padding-bottom: .5em
+}
+.book {
+  margin: 1em 0 1em 0;
+}
+.book .title {
+  font-weight: bold;
+  font-size: 1.3em;
+  margin-bottom:1em;
+}
+.book .tree {
+  padding-top:1em;
+  border-top: 1px solid #888;
+  padding-bottom: 1em;
+}
+.book .name {
+  padding-top:1em;
+  font-weight: bold;
+  font-size: 1em;
+}
+.book .nav {
+  border-top: 1px solid #888;
+  border-bottom: 1px solid #888;
+  padding-bottom: 3em;
+  padding-top: 1em;
+  clear: both;
+}
+.book .nav .links {
+  clear: both;
+}
+.book .nav .titles {
+  clear: both;
+}
+.book .nav .prev {
+  float: left;
+  text-align: left;
+  width: 45%;
+}
+.book .nav .next {
+  float: right;
+  text-align: right;
+  width: 45%;
+}
+.book .nav .up {
+  text-align: center;
+}
+.block ul {
+  margin: 0;
+  padding: 0 0 0.25em 1em;
+}
+.calendar .row-week td a {
+  display: block;
+}
+.calendar .row-week td a:hover {
+  background-color: #888; color: #fff;
+}
+.calendar a {
+  text-decoration: none;
+}
+.calendar a:hover {
+  text-decoration: none;
+}
+.calendar table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.calendar td {
+  text-align: center;
+  border: 1px solid #000;
+  padding: 1px;
+  margin: 0;
+  font-size: 0.8em;
+}
+.container-inline div {
+  display: inline;
+}
+.container-inline .form-submit {
+  margin: 0;
+}
+
+.form-item {
+  margin-bottom: 1em;
+}
+.form-item .description {
+  font-size: 9px;
+}
+.form-item label {
+  font-weight: bold;
+}
+.form-item label.option {
+  font-weight: normal;
+}
+.form-submit {
+  margin: 0.5em 0;
+}
+#aggregator .feed img {
+  float: right;
+}
+#aggregator .news-item .date {
+  float: left;
+}
+#aggregator .news-item .body {
+  margin-top: 1em;
+  margin-left: 4em;
+}
+#aggregator .news-item .body .feed {
+  font-size: 0.9em;
+}
+#forum .description {
+  font-size: 0.9em;
+  margin: 0.5em;
+}
+#forum td.created, #forum td.posts, #forum td.topics, #forum td.last-reply, #forum td.replies, #forum td.pager {
+  white-space: nowrap;
+}
+#forum td.posts, #forum td.topics, #forum td.replies, #forum td.pager {
+  text-align: center;
+}
+.item-list .icon {
+  color: #555;
+  float: right;
+  padding-left: 0.25em;
+  clear: right;
+}
+.item-list .icon a {
+  color: #000;
+  text-decoration: none;
+}
+.item-list .icon a:hover {
+  color: #000;
+  text-decoration: none;
+}
+.item-list .title {
+  font-weight: bold;
+}
+.item-list ul {
+  margin: 0 0 0.75em 0;
+  padding: 0;
+}
+.item-list ul li {
+  margin: 0 0 0.25em 1.5em;
+  padding: 0;
+  list-style: disc;
+}
+.path {
+  padding-bottom: 0.7em;
+  font-size: 1.1em;
+}
+.poll .bar {
+  height: 1em;
+  margin: 1px 0;
+  background-color: #ddd;
+}
+.poll .bar .foreground {
+  background-color: #000;
+  height: 1em;
+  clear: left;
+  float: left;
+}
+.poll .links {
+  text-align: center;
+}
+.poll .percent {
+  text-align: right;
+}
+.poll .total {
+  text-align: center;
+}
+.poll .vote-form {
+  text-align: center;
+}
+.poll .vote-form .choices {
+  text-align: left;
+  margin: 0 auto;
+  display: table;
+}
+.node-form .poll-form fieldset {
+  display: block;
+}
+.more-link {
+  text-align: right;
+}
+.node-form .form-text {
+  display: block;
+  width: 95%;
+}
+.node-form .standard {
+  clear: both;
+}
+.node-form textarea {
+  display: block;
+  width: 95%;
+}
+.node-form fieldset {
+  display: inline;
+}
+.node-form .admin .form-item .title {
+  margin-top: 0;
+}
+.node-form .admin .authored .form-item {
+  margin-bottom: 1.1em;
+}
+.node-form .admin .authored .form-text  {
+  width: auto;
+}
+.node-form .admin .authored, .node-form .admin .options, .node-form .admin .extra {
+  float: left;
+  margin-right: 2em;
+  margin-bottom: 1em;
+}
+.marker {
+  color: #f00;
+}
+.error {
+  color: #f00;
+}
+.ok {
+  color: #080;
+}
+.user-login-block {
+  text-align: center;
+}
+tr.dark {
+  background-color: #C0C79A;
+}
+tr.light {
+  background-color: #D9E493;
+}
+tr.dark td, tr.light td {
+  padding-left: .4em;
+  padding-right: .4em;
+}
+pre, code {
+  font-size: 11px;
+}
+.menu {
+  padding: 0 0 0 0.5em;
+}
+.menu ul {
+  list-style: none;
+  border: none;
+  text-align:left;
+}
+.menu li a {
+  width: 100%;
+  text-decoration: none;
+}
+td.watchdog-user {
+  background: #fea;
+  border: 1px solid #dc8;
+}
+td.watchdog-message {
+  background: #fff;
+  border: 1px solid #ddd;
+}
+td.watchdog-special {
+  background: #ccf;
+  border: 1px solid #99c;
+}
+td.watchdog-warning {
+  background: #fa2;
+  border: 1px solid #d80;
+}
+td.watchdog-httpd {
+  background: #9d9;
+  border: 1px solid #7b7;
+}
+td.watchdog-error {
+  background: #e44;
+  border: 1px solid #c22;
+}
+hr {
+  height: 1px;
+  border: 1px solid gray;
+}
+
+fieldset {
+  border: 0px solid #ccc;
+}
+
+.message {
+	border: 1px dashed #000;
+ padding: 10px;
+ font-weight: bold;
+}

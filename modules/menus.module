@@ -1,0 +1,1077 @@
+<?php
+// $Id: menus.module,v 1.1.1.1 2004/07/24 19:09:45 alex Exp $
+
+/**
+ * The menu module displays menu blocks designed and configured by an
+ * administrator. The menus are structured by taxonomy vocabularies.
+ *
+ * @version $Id: menus.module,v 1.1.1.1 2004/07/24 19:09:45 alex Exp $
+ * @copyright Copyright (c) 2003 Jim Riggs.  All rights reserved.
+ * @author Jim Riggs <drupal at jim and lissa dot com>
+ */
+
+/* This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA
+ */
+
+/* Code notes:
+ *   - I believe I have followed the prescribed coding standards, but
+ *     if you find something amiss, let me know.
+ *
+ *   - Local, non-boolean variables start with "the" as in $the_output
+ *     and $the_item.  Local boolean variables start with words such as
+ *     "is" or "has" to indicate their meaning as in $is_installed and
+ *     $has_title.  Short-lived loop variables use standard, short
+ *     names as in $i and $x.
+ *
+ *   - Global variables (of which I use none except one case where
+ *     they could not be avoided) are prefixed with "_menus_" as
+ *     prescribed in the coding standards as in $_menus_err_num.
+ *
+ *   - Function parameters are prefixed with "in", "out", or "io" to
+ *     indicate their use as input, output, or input-output,
+ *     respectively, as in $in_title.
+ *
+ *   - All functions are prefixed with "menus_" or "_menus_" and words
+ *     are separated with underscores.
+ *
+ *   - All tables created and used by the module are prefixed with
+ *     "menus_" to avoid name collisions.  This is not currently
+ *     recommended (as far as I am aware) in the module developer
+ *     information, but probably should be.
+ *
+ *   - I make extensive use of heredoc syntax.  It looks much nicer
+ *     than dozens of "$var .= ..." lines and is easier to read and
+ *     format -- especially the HTML tags.  It helps in outputting
+ *     HTML pages that are well-formatted and readable.
+ */
+
+/********************************************************************
+ * Drupal Hooks
+ ********************************************************************/
+
+/**
+ * Drupal hook that returns an array of valid permissions for the
+ * menus module.
+ *
+ * @return array An array of valid permissions for the menu module.
+ */
+function menus_perm() {
+  return array("administer menus");
+} // function menus_perm
+
+/**
+ * Drupal hook that returns an array of links valid for the provided
+ * type.
+ *
+ * @param string $in_type The type of links requested.
+ * @param integer $in_node The node for which links are requested.
+ *
+ * @return array An array of links for the specified type and node.
+ */
+function menus_link($in_type, $in_node = 0) {
+  if (($in_type == "system") && user_access("administer menus") && _menus_is_installed()) {
+    menu("admin/menus", t("menus"), "_menus_admin");
+    menu("admin/menus/menus", t("overview"), "_menus_admin", -1);
+    menu("admin/menus/create", t("create"), "_menus_admin");
+  }
+} // function menus_link
+
+/**
+ * Drupal hook that displays the current installation status of this
+ * version as well as specific module settings.
+ *
+ * @return string The form containing module-specific settings.
+ */
+function menus_settings() {
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+
+  // check to see if we are installing/upgrading/removing
+  if ($_POST['op'] == t("Install")) {
+    $the_output .= _menus_install();
+  }
+  elseif ($_POST['op'] == t("Remove") && ($_POST['edit']['confirm'] == "1")) {
+    $the_output .= _menus_remove();
+  }
+  elseif ($_POST['op'] == t("Remove")) {
+    $the_output = form_item(t("Confirmation"), t("Are you sure you want to remove the menus module? Doing so will remove the menu database table and all existing menus."));
+    $the_output .= form_hidden("confirm", "1");
+    $the_output .= form_submit(t("Remove"));
+
+    return $the_output;
+  }
+
+  $is_installed = _menus_is_installed();
+  $the_current_ver = _menus_version();
+  $the_installed_ver = variable_get("menus_version", NULL);
+  $the_header = array(t("version"), t("status"), t("operations"));
+  
+  // show currently-installed version
+  if ($the_installed_ver) {
+    $the_rows[] = array($the_installed_ver['text'], t("installed"), ($is_installed ? form_submit(t("Remove"), "op") : ""));
+  }
+
+  // show this version (if different)
+  if (!$is_installed) {
+    $the_rows[] = array($the_current_ver['text'], (($the_installed_ver['build'] > $the_current_ver['build']) ? t("out of date") : t("not installed")), (($the_installed_ver['build'] > $the_current_ver['build']) ? "" : form_submit(t("Install"), "op")));
+  }
+
+  $the_output .= form_item(t("Module status"), theme("table", $the_header, $the_rows));
+  
+  // don't allow settings changes if not installed
+  if (!$is_installed) {
+    drupal_set_message(t("You must install the current version to continue."), "error");
+  }
+  else {
+    // no module settings currently
+  }
+
+  return $the_output;
+} // function menus_settings
+
+/**
+ * Drupal hook that returns the menu block list or the requested menu
+ * block.
+ *
+ * @param string $in_operation The operation being requested.
+ * @param integer $in_block_num The block being requested.
+ *
+ * @return array The list of available blocks or the requested block
+ *         subject and content.
+ */
+function menus_block($in_operation = "list", $in_block_num = 0) {
+  if (!_menus_is_installed()) {
+    return;
+  }
+
+  if ($in_operation == "list") {
+    foreach (_menus_get_menus() as $the_vid) {
+      $the_voc = taxonomy_get_vocabulary($the_vid);
+      $the_blocks[$the_vid]['info'] = t("Menu: " . $the_voc->name);
+    }
+    
+    return $the_blocks;
+  }
+  elseif (in_array($in_block_num, _menus_get_menus())){
+    $the_voc = taxonomy_get_vocabulary($in_block_num);
+
+    if ($the_voc->name) {
+      $the_block['subject'] = t($the_voc->name);
+    }
+    
+    $the_desc = t($the_voc->description);
+    $the_menu = _menus_create_menu($in_block_num);
+
+    $the_block['content'] = <<<EOT
+<div class="menus-description">
+  $the_desc
+</div>
+<div class="menu menus-menu">
+  $the_menu
+</div>
+
+EOT;
+    
+    return $the_block;
+  }
+  else {
+    return NULL;
+  }
+} // function menus_block
+
+/**
+ * Drupal hook that returns help text for the specified section.
+ *
+ * @param string $in_section The section for which help is requested.
+ *
+ * @return string The formatted help text.
+ */
+function menus_help($in_section = "admin/help#menus") {
+  if ($in_section == "admin/system/modules#description") {
+    $the_output = "Enables administrator-configured, hierarchical menu blocks created from taxonomy vocabularies.";
+  }
+  elseif ($in_section == "admin/help#menus") {
+    $the_output = <<<EOT
+<p>
+  The menus module allows you to maintain blocks of hierarchical menus
+  whose items and structure are determined by taxonomy
+  vocabularies. Each vocabulary can be used to create a distinct menu
+  block, and each term in the vocabulary becomes a menu item. Menu
+  items can be assigned a URL to become a link to either on- or
+  off-site content and can be set to always appear expanded (if they
+  have subitems).
+</p>
+
+<p>
+  <b>NOTE: The menus module does not by design provide a menu for
+  finding or displaying <i>content</i> based on taxonomy vocabularies. (There
+  are several other modules that provide this functionality.) This
+  module provides a means for creating a hierarchical menu with links
+  to <i>any</i> internal or external resource. The vocabulary is not used for
+  content searching/display, but rather for menu structure.</b>
+</p>
+
+<p>
+  Below is a simple example of how a vocabulary may be used to create a site
+  navigation menu:
+</p>
+
+EOT;
+
+    $the_header = array(t("name"), t("URL/description"), t("expanded"));
+    $the_rows = array(
+    array(t("home"), "index.php<br />" . t("Return to the home page."), t("no")),
+    array(t("blogs"), "blog<br />" . t("View the latest blog entries."), t("yes")),
+    array(t("-- jack"), "blog/2<br />" . t("View jack's blog."), t("no")),
+    array(t("-- jill"), "blog/2<br />" . t("View jill's blog."), t("no")),
+    array(t("external links"), t("&lt;none&gt;<br />&lt;none&gt;"), t("yes")),
+    array(t("-- cms"), t("&lt;none&gt;<br />&lt;none&gt;"), t("yes")),
+    array(t("-- -- drupal"), "http://drupal.org/<br />" . t("Drupal's website."), t("no")),
+    array(t("-- server"), t("&lt;none&gt;<br />&lt;none&gt;"), t("yes")),
+    array(t("-- -- apache"), "http://httpd.apache.org/<br />" . t("The Apache web server."), t("no")),
+    array(t("about us"), "aboutus<br />" . t("About this site."), t("no"))
+  );
+
+    $the_output .= theme("table", $the_header, $the_rows);
+    $the_output .= <<<EOT
+
+<p>
+  The menus module stores menu items in the SQL database. To create
+  the database table, the module must be installed using the menus
+  module administration page. The same page can be used for upgrading
+  or removing the required database table.
+</p>
+
+<p>
+  Management of the menu table is handled using the "administer &gt;
+  menus" menu. The "overview" provides a list of all menus and allows
+  for editing and deleting existing menus as well as the editing of
+  individual menu items. New menus can be created from taxonomy
+  vocabularies by using the "create" link.
+</p>
+
+EOT;
+  }
+  elseif (($in_section == "admin/menus") || ($in_section == "admin/menus/menus")) {
+    $the_output = <<<EOT
+<p>
+  The table below lists all menus on this site. Menus may be edited or
+  deleted using the links provided. The name, description, and
+  structure of the menus is determined by its associated vocabulary to
+  which an editing link is also provided.
+</p>
+
+EOT;
+  }
+  elseif ($in_section == "admin/menus/create") {
+    $the_output = <<<EOT
+<p>
+  Use the pull-down below to select a vocabulary to be used for a menu
+  on this site.
+</p>
+
+EOT;
+  }
+  elseif (preg_match("#^admin/menus/\d+#", $in_section)) {
+    $the_output = <<<EOT
+<p>
+  The table below shows each item in this menu, its name, URL,
+  description, and expanded state. The individual items can be edited
+  using the link provided.
+</p>
+
+EOT;
+  }
+  elseif (preg_match("#^admin/menus/edit/\d+#", $in_section)) {
+    $the_output = <<<EOT
+<p>
+  Use the form below to set the URL for this item and to indicate if 
+  it should be expanded.
+</p>
+
+EOT;
+  }
+  elseif ($in_section == "admin/system/modules/menus") {
+    $the_output = <<<EOT
+<p>
+  This page controls the installation and configuration of the menus
+  module. The status table shows the currently-installed version and,
+  if applicable, any other versions available on the host. An
+  uninstalled or new version can be installed, creating or updating
+  the menu database table. Once installed, various configuration
+  settings for the module will become available. An installed version
+  can be removed, deleting the database table and all menus.
+</p>
+
+EOT;
+  }
+
+  return t($the_output);
+} // function menus_help
+
+/**
+ * Drupal hook for taxonomy.module that handles deletion of
+ * vocabularies and terms.
+ *
+ * @param string $in_op The operation being performed.
+ * @param string $in_type The type of object on which the operation is
+ *        being performed (vocabulary or term).
+ * @param object $in_object The vocabulary or term object on which the
+ *        operation is being performed.
+ * @param mixed $in_arg4 Ignored and currently unused.
+ */
+function menus_taxonomy($in_op, $in_type, $in_object, $in_arg4) {
+  if ($in_op != "delete") {
+    return;
+  }
+
+  if ($in_type == "vocabulary") {
+    db_query("DELETE FROM {menus_items} WHERE vid = '%d'", $in_object->vid);
+  }
+  elseif ($in_type == "term") {
+    db_query("DELETE FROM {menus_items} WHERE tid = '%d'", $in_object->tid);
+  }
+} // function menus_taxonomy
+
+/********************************************************************
+ * Module Functions
+ ********************************************************************/
+
+/**
+ * Returns the version of this release of the menus module.
+ *
+ * @return array An array with keys 'text' and 'build' containing the
+ *         text version and build ID of this release, respectively.
+ */
+function _menus_version() {
+  /* Why text and an ID?  Well, the text is easier for the user to
+   * read and understand while the build ID, being a number (a date
+   * with a serial, specifically), is easier for the developer to use
+   * to determine newer/older versions for upgrade and installation
+   * purposes.
+   */
+  return array("text" => "1.1.0", "build" => 2004032901);
+} // function _menus_version
+
+/**
+ * Indicates whether or not the menus module is installed and
+ * up to date, transparently upgrading compatible versions when
+ * possible.
+ *
+ * @return boolean True if the module is up to date;  false, otherwise.
+ */
+function _menus_is_installed() {
+  $the_current_ver = _menus_version();
+  $the_installed_ver = variable_get("menus_version", NULL);
+
+  /* Handle versions that can be safely/transparently updated.
+   * Currently this is anything older and should remain so until there
+   * is a table change.  At that point, some more sophisticated logic
+   * will have to go in here.
+   */
+  if ($the_installed_ver && ($the_installed_ver['build'] < $the_current_ver['build'])) {
+    variable_set("menus_version", $the_current_ver);
+
+    return true;
+  }
+  
+  return ($the_current_ver['build'] == $the_installed_ver['build']);
+} // function _menus_is_installed
+
+/**
+ * Returns the vocabulary IDs of all currently-installed menus.
+ *
+ * @return array The vocabulary IDs of all currently-installed menus.
+ */
+function _menus_get_menus() {
+  if (!_menus_is_installed()) {
+    return array();
+  }
+
+  $the_rows = array();
+  $the_result = db_query("SELECT m.vid FROM {menus_items} m WHERE m.tid = '0'");
+
+  while ($the_vid = db_fetch_object($the_result)) {
+    $the_rows[] = $the_vid->vid;
+  }
+
+  return $the_rows;
+} // function _menus_get_menus
+
+/**
+ * Returns all menu item information for the provided term ID.
+ *
+ * @param integer $in_tid The term ID for which information is
+ *        requested.
+ *
+ * @return object An object with all term and menu item information.
+ *         Menu information is prefixed with "menus_" as in menus_url.
+ */
+function _menus_get_item($in_tid) {
+  if (!_menus_is_installed()) {
+    return NULL;
+  }
+  
+  $the_term = taxonomy_get_term($in_tid);
+  $the_item = db_fetch_object(db_query("SELECT m.url AS menus_url, m.expanded AS menus_expanded FROM {menus_items} m WHERE m.tid = '%d'", $in_tid));
+
+  $the_term->menus_url = $the_item->menus_url;
+  $the_term->menus_expanded = $the_item->menus_expanded;
+
+  return $the_term;
+} // function _menus_get_item
+
+/**
+ * Returns the tree structure for the provided vocabulary ID and
+ * places a map (TID => term reference) into the output array for easy
+ * access of term object via TID.
+ *
+ * @param integer $in_vid The vocabulary ID for which the tree is
+ *        requested.
+ * @param array $io_map The array into which the TID => term object
+ *        reference map will be written.
+ *
+ * @return array The menu tree (as dictated by taxonomy_get_tree) with
+ *         all term and menu information.
+ */
+function _menus_get_tree($in_vid, &$io_map) {
+  // get all menu items for this vocabulary
+  $the_result = db_query("SELECT m.* FROM {menus_items} m WHERE m.vid = '%d'", $in_vid);
+
+  while ($the_item = db_fetch_object($the_result)) {
+    $the_menuItems[$the_item->tid] = $the_item;
+  }
+
+  // create/verify output arrays
+  if (!$io_map) {
+    $io_map = array();
+  }
+
+  $the_tree = array();
+
+  // add each item to the tree and output arrays, and set menu
+  // information for each item
+  foreach (taxonomy_get_tree($in_vid) as $the_item) {
+    $the_item->menus_url = $the_menuItems[$the_item->tid]->url;
+    $the_item->menus_expanded = $the_menuItems[$the_item->tid]->expanded;
+
+    $io_map[$the_item->tid] = $the_item;
+    $the_tree[] = &$io_map[$the_item->tid];
+  }
+  
+  return $the_tree;
+} // function _menus_get_tree
+
+/**
+ * Menu callback that routes menu operations to the proper function
+ * and displays the appropriate page.
+ */
+function _menus_admin() {
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+
+  $the_op = $_POST['op'];
+  
+  if (empty($the_op)) {
+    $the_op = arg(2);
+  }
+
+  switch ($the_op) {
+    case t("Create"): // create new menu
+      $the_output = _menus_admin_create();
+      break;
+
+    case t("Save"): // update an item
+      $the_output = _menus_admin_save();
+      break;
+
+    case "create": // show create menu form
+      $the_output = _menus_admin_create_form();
+      break;
+
+    case "edit": // show edit item form
+      $the_output = _menus_admin_item_form(arg(3));
+      break;
+
+    case "delete": // delete a menu
+      $the_output = _menus_admin_delete(arg(3));
+      break;
+
+    default:
+      if (intval($the_op)) {
+        $the_output = _menus_menu_overview($the_op, "admin");
+      }
+      else {
+        $the_output = _menus_overview("admin");
+      }
+      
+      break;
+  }
+  
+  print theme('page', $the_output, $the_title);
+} // function _menus_admin
+
+/**
+ * Displays a form including a pull-down menu of available
+ * vocabularies for which a menu can be created.
+ *
+ * @return string The form to be displayed.
+ */
+function _menus_admin_create_form() {
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+
+  $the_menus = _menus_get_menus();
+
+  foreach (taxonomy_get_vocabularies() as $the_voc) {
+    if (!in_array($the_voc->vid, $the_menus)) {
+      $the_vocs[$the_voc->vid] = t($the_voc->name);
+    }
+  }
+
+  if (!count($the_vocs)) {
+    return t("No vocabularies available.");
+  }
+
+  $the_form  = form_select(t("Vocabulary"), "vid", NULL, $the_vocs,t("Select the taxonomy vocabulary to use for this menu."));
+  $the_form .= form_submit(t("Create"));
+
+  return form($the_form);
+} // function _menus_admin_create_form
+
+/**
+ * Creates a new menu for a vocabulary by creating a menu item with
+ * the vocabulary ID and a term ID of 0.  (A zero TID signifies a
+ * menu.)
+ *
+ * @return string An error or success message as appropriate.
+ */
+function _menus_admin_create() {
+  global $user, $_menus_err_num;
+
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+
+  $the_vid = $_POST['edit']['vid'];
+  $the_query = <<<EOT
+INSERT INTO {menus_items}
+  (vid, tid, url, expanded, ctime, mtime, uid)
+VALUES
+  ('%d', '0', '', '0', '%d', '%d', '%d')
+EOT;
+
+  set_error_handler("_menus_error_handler");
+  db_query($the_query, $the_vid, time(), time(), $user->uid);
+  restore_error_handler();
+
+  if (!$_menus_err_num) {
+    drupal_set_message(t("Menu created."));
+  }
+  else {
+    drupal_set_message(t("Could not create menu."), "error");
+  }
+
+  // show the create form again
+  $the_output .= _menus_admin_create_form();
+
+  return $the_output;
+} // function _menus_admin_create
+
+/**
+ * Returns a form for editing the menu item corresponding to the
+ * provided term ID.
+ *
+ * @param integer $in_tid The term ID of the menu item to be edited.
+ *
+ * @return string The form to be displayed.
+ */
+function _menus_admin_item_form($in_tid) {
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+
+  $the_item = _menus_get_item($in_tid);
+  $the_form  = form_item(t("Title"), t($the_item->name), t("The name can be updated by ") . l(t("editing this term"), "admin/taxonomy/edit/term/$in_tid") . ".");
+  $the_form .= form_item(t("Description"), ($the_item->description ? t($the_item->description) : t("&lt;none&gt;")), t("The description can be updated by ") . l(t("editing this term"), "admin/taxonomy/edit/term/$in_tid") . ".");
+  $the_form .= form_textfield(t("URL"), "menus_url", $the_item->menus_url, 70, 255, t("The URL (link) address for this item. The URL may be fully-qualified (http://drupal.org/), relative (node/add/story), or blank for no link."));
+  $the_form .= form_item(t("Options"), "");
+  $the_form .= form_checkbox(t("Expanded"), "menus_expanded", 1, $the_item->menus_expanded, t("If selected, this item (if it has subitems) will always be expanded."));
+  $the_form .= form_submit(t("Save"));
+  
+  return form($the_form);
+} // function _menus_admin_item_form
+
+/**
+ * Saves an edited item.
+ *
+ * @return string An error or success message as appropriate.
+ */
+function _menus_admin_save() {
+  global $user, $_menus_err_num;
+
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+
+  $the_tid = arg(3);
+  $the_item = _menus_get_item($the_tid);
+  $the_url = trim($_POST['edit']['menus_url']);
+  $is_expanded = ($_POST['edit']['menus_expanded'] ? 1 : 0);
+
+  if (!$the_tid) {
+    drupal_set_message(t("No menu item specified."), "error");
+
+    return _menus_admin_setup_form();
+  }
+
+  if (isset($the_item->menus_url)) {
+    $the_query = <<<EOT
+UPDATE {menus_items}
+SET
+  url = '%s',
+  expanded = '%d',
+  mtime = '%d',
+  uid = '%d'
+WHERE tid = '%d'
+EOT;
+
+    set_error_handler("_menus_error_handler");
+    db_query($the_query, $the_url, $is_expanded, time(), $user->uid, $the_tid);
+    restore_error_handler();
+  }
+  else {
+    $the_query = <<<EOT
+INSERT INTO {menus_items}
+  (vid, tid, url, expanded, ctime, mtime, uid)
+VALUES
+  ('%d', '%d', '%s', '%d', '%d', '%d', '%d')
+EOT;
+
+    set_error_handler("_menus_error_handler");
+    db_query($the_query, $the_item->vid, $the_tid, $the_url, $is_expanded, time(), time(), $user->uid);
+    restore_error_handler();
+  }
+
+  if (!$_menus_err_num) {
+    drupal_set_message(t("Item saved."));
+
+    // show the overview list
+    $the_output .= _menus_menu_overview($the_item->vid, "admin");
+  }
+  else {
+    drupal_set_message(t("A database error occurred saving this item."), "error");
+
+    // show the edit form again
+    $the_output .= _menus_admin_setup_form();
+  }
+
+  return $the_output;
+} // function _menus_admin_save
+
+/**
+ * Deletes a menu.
+ *
+ * @param integer $in_vid The vocabulary ID of the menu to delete.
+ *
+ * @return string An error or success message as appropriate.
+ */
+function _menus_admin_delete($in_vid) {
+  global $_menus_err_num;
+
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+  
+  set_error_handler("_menus_error_handler");
+  db_query("DELETE FROM {menus_items} WHERE vid = '%d'", $in_vid);
+  restore_error_handler();
+
+  if (!$_menus_err_num) {
+    drupal_set_message(t("Menu deleted."));
+  }
+  else {
+    drupal_set_message(t("Could not delete menu."), "error");
+  }
+
+  // show the overview list
+  $the_output .= _menus_overview("admin");
+
+  return $the_output;
+} // function _menus_admin_delete
+
+/**
+ * Recursively creates and returns the menu HTML for the provided
+ * vocabulary and term.
+ *
+ * @param integer $in_vid The vocabulary ID for the menu to be created.
+ * @param integer $in_start The term ID of the parent item for the
+ *        current interation. Except when being called recursively from
+ *        within the function, this argument should be omitted or zero.
+ *
+ * @return string The HTML code for the menu.
+ */
+function _menus_create_menu($in_vid, $in_start = 0) {
+  static $s_items;
+  static $s_index;
+  static $s_count;
+
+  if ($in_start == 0) {
+    // new vocabulary -- set up the statics and expanded items
+    $the_map = array();
+    $s_items = _menus_get_tree($in_vid, $the_map);
+    $s_count = count($s_items);
+
+    if ($_GET['menus_expanded']) {
+      foreach ($_GET['menus_expanded'] as $the_tid => $is_expanded) {
+        $the_map[$the_tid]->menus_expanded = ($is_expanded ? 1 : 0);
+      }
+    }
+
+    // get current item
+    $the_alias = drupal_get_path_alias($_GET['q']);
+    $the_alias = ($the_alias ? $the_alias : $_GET['q']);
+    $the_result = db_query("SELECT m.tid FROM {menus_items} m WHERE m.vid = '%d' AND m.url IN ('%s', '%s')", $in_vid, $the_alias, $_GET['q']);
+
+    while ($the_curr_item = db_fetch_object($the_result)) {
+      // expand current item
+      $the_map[$the_curr_item->tid]->menus_expanded = 1;
+      $the_map[$the_curr_item->tid]->menus_active = 1;
+      
+      // expand ancestor items
+      _menus_expand_ancestors($the_curr_item->tid, $the_map);
+    }
+  }
+
+  $the_output = "\n<ul>\n";
+
+  // loop through the items at this depth
+  for ($s_index = $in_start; ($s_index < $s_count) && ($s_items[$s_index]->depth >= $s_items[$in_start]->depth); $s_index++) {
+    $the_item = $s_items[$s_index];
+    $the_next_item = $s_items[$s_index + 1];
+    $has_subitem = ($the_next_item->depth > $the_item->depth);
+
+    if ($has_subitem) {
+      if (!$the_item->menus_url) {
+        // create a link to the current page with this item expanded
+        // or collapsed
+
+        // get the query string
+        list(, $the_query) = split("\?", request_uri());
+
+        // append our query data
+        $the_query = ($the_query ? $the_query . "&" : "") . "menus_expanded[$the_item->tid]=" . ($the_item->menus_expanded ? 0 : 1);
+
+        $the_item->menus_url = url($_GET['q'], $the_query);
+      }
+
+      if ($the_item->menus_expanded) {
+        $the_class = "expanded";
+      }
+      else {
+        // ignore all the submenus/subitems
+        while ($s_items[$s_index + 1]->depth > $the_item->depth) {
+          $s_index++;
+        }
+    
+        $the_class = "collapsed";
+      }
+    }
+    else {
+      $the_class = "leaf";
+    }
+    
+    $the_output .= "<li class=\"$the_class\">";
+
+    $the_name = t($the_item->name);
+    $the_title = t($the_item->description);
+
+    if (!$the_item->menus_url) {
+      // no link -- just use the name
+      $the_output .= "$the_name";
+    }
+    elseif((substr($the_item->menus_url, 1, 1) == "/") || strstr($the_item->menus_url, "://")) {
+      // fully-qualified/absolute URL
+      $the_title = ($the_title ? " title=\"$the_title\"" : "");
+      $the_act_class = ($the_item->menus_active ? " class=\"active\"" : "");
+      $the_output .= "<a href=\"$the_item->menus_url\"$the_title$the_act_class>$the_name</a>";
+    }
+    else {
+      $the_atts = array();
+
+      // internal/relative -- use a Drupal link
+      if ($the_title) {
+        $the_atts['title'] = $the_title;
+      }
+      
+      if ($the_item->menus_active) {
+        $the_atts['class'] = "active";
+      }
+      
+      $the_output .= l(t($the_item->name), $the_item->menus_url, $the_atts);
+    }
+    
+    if ($the_class == "expanded") {
+      // call recursively -- create the submenu
+      $the_output .= _menus_create_menu($in_vid, $s_index + 1);
+    }
+
+    $the_output .= "</li>\n";
+  }
+
+  $the_output .= "</ul>\n";
+  
+  // decrement index as we have gone one past
+  $s_index--;
+
+  return $the_output;
+} // function _menus_create_menu
+
+/**
+ * Recursively sets each of the provided item's parents to be
+ * expanded.
+ *
+ * @param integer $in_tid The term ID for which all ancestors should be
+ *        expanded.
+ * @param array $io_item_map The array reference containing a map
+ *        (TID => term object) of items.
+ */
+function _menus_expand_ancestors($in_tid, &$io_item_map) {
+  $the_item = $io_item_map[$in_tid];
+
+  if (!$the_item->parents) {
+    return;
+  }
+
+  foreach ($the_item->parents as $the_parent) {
+    $io_item_map[$the_parent]->menus_expanded = 1;
+    _menus_expand_ancestors($the_parent, $io_item_map);
+  }
+} // function _menus_expand_ancestors
+
+/**
+ * Displays a list of all menus.
+ *
+ * @return string A table of menus.
+ */
+function _menus_overview($in_type = "user") {
+  $the_max = 50;
+
+  if (($in_type == "admin") && user_access("administer menus")) {
+    $is_admin = true;
+  }
+
+  $the_header = array(t("name"), t("description"));
+  
+  if ($is_admin) {
+    $the_header[] = array("data" => t("operations"), "colspan" => 3);
+  }
+    
+  foreach (_menus_get_menus() as $the_vid) {
+    $the_voc = taxonomy_get_vocabulary($the_vid);
+    $the_row = array(t($the_voc->name), t($the_voc->description));
+    
+    if ($is_admin) {
+      $the_row[] = l(t("edit vocabulary"), "admin/taxonomy/edit/vocabulary/$the_vid");
+      $the_row[] = l(t("edit menu"), "admin/menus/$the_vid");
+      $the_row[] = l(t("delete"), "admin/menus/delete/$the_vid");
+    }
+    
+    $the_rows[] = $the_row;
+  }
+  
+  $the_pager= theme("pager", NULL, $the_max);
+    
+  if ($the_pager) {
+    $the_rows[] = array(array("data" => $the_pager, "colspan" => ($is_admin ? 5 : 2)));
+  }
+
+  return theme("table", $the_header, $the_rows);
+} //function _menus_overview
+
+/**
+ * Displays a list of all menu items for the provided vocabulary ID.
+ *
+ * @param integer $in_vid The vocabulary ID of the menu requested.
+ * @param string $in_type The type of overview to show, "user" or
+ *        "admin".
+ *
+ * @return string A table of menu items.
+ */
+function _menus_menu_overview($in_vid, $in_type = "user") {
+  $the_max = 50;
+
+  if (($in_type == "admin") && user_access("administer menus")) {
+    $is_admin = true;
+  }
+
+  $the_voc = taxonomy_get_vocabulary($in_vid);
+
+  $the_output  = form_item(t("Name"), t($the_voc->name), ($is_admin ? (t("The name can be updated by ") . l(t("editing this vocabulary"), "admin/taxonomy/edit/vocabulary/$in_vid") . ".") : ""));
+  $the_output .= form_item(t("Description"), ($the_voc->description ? t($the_voc->description) : t("&lt;none&gt;")), ($is_admin ? (t("The description can be updated by ") . l(t("editing this vocabulary"), "admin/taxonomy/edit/vocabulary/$in_vid") . ".") : ""));
+
+  $the_header = array(t("name"), t("URL/description"), t("expanded"));
+  
+  if ($is_admin) {
+    $the_header[] = t("operations");
+  }
+  
+  $the_rows = array();
+
+  foreach (_menus_get_tree($in_vid, $the_array) as $the_term) {
+    $the_prefix = "";
+    $the_row = array();    
+
+    for ($i = $the_term->depth; $i > 0; $i--) {
+      $the_prefix .= "-- ";
+    }
+
+    $the_row[] = $the_prefix . t($the_term->name);
+    $the_row[] = ($the_term->menus_url ? $the_term->menus_url : t("&lt;none&gt;")) . "<br />\n" . ($the_term->description ? t($the_term->description) : t("&lt;none&gt;"));
+    $the_row[] = ($the_term->menus_expanded ? t("yes") : t("no"));
+
+    if ($is_admin) {
+      $the_row[] = l(t("edit item"), "admin/menus/edit/$the_term->tid");
+    }
+    
+    $the_rows[] = $the_row;
+  }
+
+  $the_pager = theme("pager", NULL, $the_max);
+  
+  if ($the_pager) {
+    $the_rows[] = array(array("data" => $the_pager, "colspan" => ($is_admin ? 4 : 3)));
+  }
+
+  $the_output .= form_item(t("Menu items"), theme("table", $the_header, $the_rows), t("This table shows this menu's items and hierarchical structure.") . ($is_admin ? (t(" The menu structure can be changed by ") . l(t("editing this vocabulary"), "admin/taxonomy") . ".") : ""));
+
+  return $the_output;
+} //function _menus_menu_overview
+
+/**
+ * Installs the menu module by creating the table and setting the
+ * menus_version variable.
+ */
+function _menus_install() {
+  global $_menus_err_num;
+
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+  
+  // get version information
+  $is_installed = _menus_is_installed();
+  $the_current_ver = _menus_version();
+  $the_installed_ver = variable_get("menus_version", NULL);
+
+  if ($is_installed) {
+    // don't reinstall
+    drupal_set_message(t("Version already installed."), "error");
+  }
+  elseif ($the_installed_ver['build'] > $the_current_ver['build']) {
+    // don't install an older version
+    drupal_set_message(t("Cannot install an older version."), "error");
+  }
+  else {
+    $the_query = <<<EOT
+CREATE TABLE {menus_items} (
+  vid INTEGER NOT NULL,             -- vocabulary ID for the item
+  tid INTEGER NOT NULL,             -- term ID for the item
+  url VARCHAR(255) NOT NULL,        -- link url
+  expanded INTEGER NOT NULL,        -- 1 = always expanded
+  ctime INTEGER NOT NULL,           -- creation timestamp
+  mtime INTEGER NOT NULL,           -- modification timestamp
+  uid INTEGER NOT NULL              -- modification user ID
+)
+EOT;
+
+    set_error_handler("_menus_error_handler");    
+    db_query($the_query);
+    restore_error_handler();
+  
+    if ($_menus_err_num) {
+      // couldn't create table
+      drupal_set_message(t("Could not create the menus table. Please try again."), "error");
+    }
+    else {
+      // installed successfully
+      variable_set("menus_version", $the_current_ver);
+      drupal_set_message(t("Menus module version %vers successfully installed. You can now use the \"administer &gt; menus\" menu to create and manage menus.", array("%vers" => $the_current_ver['text'])));
+    }
+  }
+} // function _menus_install
+
+/**
+ * Removes the menu module by dropping the table and deleting the
+ * module-specific variables.
+ */
+function _menus_remove() {
+  global $_menus_err_num;
+
+  if (!user_access("administer menus")) {
+    return message_access();
+  }
+  
+  if (!_menus_is_installed()) {
+    drupal_set_message(t("Current version not installed."), "error");
+  }
+  else {
+    set_error_handler("_menus_error_handler");    
+    db_query("DROP TABLE {menus_items}");
+    restore_error_handler();
+
+    if ($_menus_err_num) {
+      // couldn't drop table
+      drupal_set_message(t("Could not remove the menus table."), "error");
+    }
+    else {
+      $the_current_ver = variable_get("menus_version", "");
+      variable_del("menus_version");
+      drupal_set_message(t("Menus module version %vers successfully removed.", array("%vers" => $the_current_ver['text'])));
+    }      
+  }
+} // function _menus_remove
+
+/**
+ * Error-handling function that calls Drupal's main error_handler for
+ * any specific handling it may do (watchdog) and sets a series of
+ * menu-module-specific global variables for catching errors. This
+ * is used mainly to capture database failures creating/deleting rows
+ * and/or tables.
+ *
+ * @param integer $in_num The error number.
+ * @param string $in_message The error description.
+ * @param string $in_file The file in which the error occurred.
+ * @param integer $in_line The line at which the error occurred.
+ * @param array $in_vars The array containing the active symbol table
+ *        at the time the error occurred.
+ */
+function _menus_error_handler($in_num, $in_message, $in_file, $in_line, $in_vars) {
+  global $_menus_err_num, $_menus_err_msg, $_menus_err_file, $_menus_err_line, $_menus_err_vars;
+
+  // chain to Drupal's main error-handler for watchdog
+  error_handler($in_num, $in_message, $in_file, $in_line, $in_vars);
+
+  // set up our globals
+  $_menus_err_num = $in_num;
+  $_menus_err_msg = $in_message;
+  $_menus_err_file = $in_file;
+  $_menus_err_line = $in_line;
+  $_menus_err_vars = $in_vars;
+} // function _menus_error_handler
+?>

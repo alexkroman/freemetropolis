@@ -1,0 +1,36 @@
+TextilePHP
+README
+@(#) $Id: README,v 1.1.2.2 2004/07/28 16:08:41 jhriggs Exp $
+
+Text::Textile was written by Brad Choate, <brad at bradchoate dot
+com>.  It is an adaptation of Textile, developed by Dean Allen of
+Textism.com.  TextilePHP is a PHP port of Brad Choate's Text::Textile
+(Textile.pm) Perl module ported by Jim Riggs <textile at jimandlissa
+dot com>.
+
+Both user- and developer-level documentation is available in the doc/
+directory.
+
+Files
+  - Textile.php
+      the actual Textile implementation (PHP source code)
+
+  - README (this file)
+      general information
+
+  - doc/
+      HTML documentation for Textile.php
+
+  - CREDITS
+      information about those responsible for this module
+
+  - TODO
+      feature requests and modification suggestions
+
+  - CHANGELOG
+      change/release history for this code
+
+  - LICENSE
+      the license (GNU General Public License) covering the usage,
+      modification, and distribution of this software and its
+      accompanying files

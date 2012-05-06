@@ -1,0 +1,164 @@
+<?php
+/* $Id: emailpage.module,v 1.1.2.3 2004/05/31 14:40:47 nick Exp $ */
+
+function emailpage_help($section = 'admin/help#emailpage') {
+  $output = "";
+
+  switch ($section) {
+    case 'admin/system/modules#description':
+      $output = t("Provides an \"email this page\" link for all nodes");
+      break;
+  }
+  return $output;
+}
+
+function emailpage_perm() {
+  return array("administer emailpage"); 
+}
+
+
+function emailpage_link($type, $node=0, $main=0) {
+  $links=array();
+  if (($type == "system")) {
+  // URL, page title, func called for page content, arg, 1 = don't disp menu
+    menu("emailpage", t("email this page"), "emailpage_page", 1, 1);
+  }
+
+
+  // This var is set in the settings section under the admin/modules/emailpage section
+  // It shows 'email this $nodetype' or 'email this page'
+  $e_l_t=variable_get('emailpage_link_type', 0);
+  if($e_l_t) {
+    if($type == "comment") {
+      $e_l_t = "comment";
+      $links[] = l(t("email this ".$e_l_t), "emailpage&nid=$node->nid&cid=$node->cid", array("title" => t("Email this page to a friend")), NULL);
+      return $links;
+    }
+    $e_l_t=$node->type;
+  } else $e_l_t="page";
+
+    
+  if($main) {  // not on an index page
+    if(variable_get('emailpage_show_on_main', 0)) {  
+      $links[] = l(t("email this ".$e_l_t), "emailpage&nid=$node->nid", array("title" => t("Email this page to a friend")), NULL);
+      return $links;
+    }
+  } else { // not on a main page
+    $links[] = l(t("email this ".$e_l_t), "emailpage&nid=$node->nid", array("title" => t("Email this page to a friend")), NULL);                                                                          return $links;
+  }
+}
+
+function emailpage_page() {
+  global $base_url;
+
+
+  // first we check to see if they have reached the emailpage_flood_control limit
+  // which is set in the settings.
+  if($_COOKIE['emailpage_flood_count'] >= variable_get('emailpage_flood_control', 10)) {
+    $content=variable_get('emailpage_flood_error_msg', t("Sorry, you have reached the maximum number of emails allowed per user. Please try later"));
+    print theme("page", $content);
+    return;
+  }
+
+  $host=parse_url($base_url);
+
+  // Check we have the $node-nid needed to send the page
+  // and the comment fragment if they email a comment
+  if(!$_COOKIE['referer']) {
+    if($_GET['nid']) {
+      if($_GET['cid']) {  // this takes care of links to specific comments
+        $nodelink=$base_url.'/'.url('node/view/'.$_GET['nid']."#comment-".$_GET['cid']);
+      } else {
+        $nodelink=$base_url.'/'.url('node/view/'.$_GET['nid']);
+      }
+      // Set the refering page in a cookie
+      // 5mins should be enuf for anyone to put in a valid email address ;-)
+      setcookie('referer', $nodelink, time()+300, '/', ".".$host['host']);
+    } else {
+      $nodelink=$base_url;
+    }
+  }
+
+
+
+  //  we need to check if the form has been posted..
+  if($_POST) {
+    if(!user_validate_mail($_POST['edit']['emailpage_addy']) && $_POST['edit']['emailpage_sender']) {  // all is well, so lets send it!
+      $headers="Reply-To: ".variable_get('emailpage_sender_addy', "")."\r\nFrom: ".variable_get('emailpage_sender_addy', "")."\r\n";
+      mail($_POST['edit']['emailpage_addy'], $_POST['edit']['emailpage_sender']." ".variable_get('emailpage_subject_line', "thought you'd like to see this"), $_COOKIE['referer']."\n\n".$_POST['edit']['emailpage_sender']." ".wordwrap(variable_get('emailpage_message',"someone thought you would like this page\n"), 72), $headers);
+
+      // Delete the cookie
+      // If we dont do this, sending other pages becomes messy.
+      setcookie('referer', "", time()-3600, '/', ".".$host['host']);
+
+      // Increase the emailpage_flood_control cookie (check settings)
+      setcookie('emailpage_flood_count', $_COOKIE['emailpage_flood_count']+1, time()+7200, '/', ".".$host['host']);
+
+      $content=variable_get('emailpage_success_msg', "Success!");
+      variable_set('emailpage_total', variable_get('emailpage_total', 0)+1);
+      print theme("page", $content);
+      return;
+      
+    } else {
+    
+      $error="<p class=\"error\">You must supply your name and a valid email address</p>";
+      $form.=form_textfield(t("Your Name"), "emailpage_sender", $_POST['edit']['emailpage_sender'], 20, 30);
+      $form.=form_textfield(t("Address to send to"), "emailpage_addy", $_POST['edit']['emailpage_addy'], 20, 30);
+      $form.=form_submit("Send it Now!","");
+      $content.=$error;
+      $content.=form($form, "post", url("emailpage"));
+      $content.="<h2>Example  Email</h2>\n";
+      $content.="<p><strong>Subject: </strong>[Your Name] ".variable_get('emailpage_subject_line', "thought you'd like to see this")."</p>\n\n<p>".$nodelink."</p>\n\n<p>[Your Name] ".nl2br(variable_get('emailpage_message',"someone thought you would like this page\n"))."</p>";
+      print theme("page", $content);
+
+    }
+  } 
+
+  if(!$_POST) {
+    $form.=form_textfield(t("Your Name"), "emailpage_sender", $_POST['edit']['emailpage_sender'], 20, 30);
+    $form.=form_textfield(t("Address to send to"), "emailpage_addy", $_POST['edit']['emailpage_addy'], 20, 30);
+    $form.=form_submit("Send it Now!","");
+    $content.=form($form, "post", url("emailpage"));
+    $content.="<h2>Example  Email</h2>\n";
+    $content.="<p><strong>Subject: </strong>[Your Name] ".variable_get('emailpage_subject_line', "thought you'd like to see this")."</p>\n\n<p>".$nodelink."</p>\n\n<p>[Your Name] ".nl2br(variable_get('emailpage_message',"someone thought you would like this page\n"))."</p>";
+
+    print theme("page", $content);
+  }
+}
+
+function emailpage_settings() {
+    
+  global $base_url;
+
+  // only administrators can access this module
+  if (!user_access("admin emailpage")) {
+      return message_access();
+  }
+
+  $host=parse_url($base_url);
+
+  $output="<p>Total emails sent to date: <strong>".variable_get('emailpage_total', 1)."</strong></p>\n";
+  $output.=form_radios('Reset the Counter?', 'emailpage_total', variable_get('emailpage_total', 0), array(1 => "Yes", variable_get('emailpage_total', 0) => "No"));
+  $output.=form_radios('Use node type to create link?', 'emailpage_link_type', variable_get('emailpage_link_type', 0), array(1 => "Yes", 0 => "No"), t("If yes, the link will read &quot;email this <em>nodetype</em>&quot;, if no, it will just read &quot;email this page&quot;"));
+  $output.=form_radios('Show link on index pages?', 'emailpage_show_on_main', variable_get('emailpage_show_on_main', 0), array(1 => "Yes", 0 => "No"), t("If yes, the email this page link will show on all teasers on the index pages as well as the individual nodes"));
+  $output.=form_select("Flood Control", "emailpage_flood_control", variable_get('emailpage_flood_control', 10), array(1 => "1", 2 => "2", 3 => "3", 4 => "4", 5 => "5", 6 => "6", 7 => "7", 8 => "8", 9 => "9", 10 => "10"), "How many times a user can use the form in a 2hr period. This prevents abusers from sending out unlimited amounts of unwanted mail from the emailpage module.");
+  $output.=form_textfield(t("Sender Address"), 'emailpage_sender_addy', 
+  variable_get('emailpage_sender_addy', "NoReply@".$host['host']), 30, 40, "The address to send FROM");
+  $output.=form_textfield(t("Subject Line"), 'emailpage_subject_line', 
+  variable_get('emailpage_subject_line', "thought you'd like to see this"), 30, 40, "The subject line will start with the senders name as the first word, you can edit the rest of the line above");
+  $output.=form_textarea(t("Message"), 'emailpage_message', variable_get('emailpage_message', " thought you would like to see the above page\n\n"), 40, 10, "The senders name will appear as the first word followed by the text in the textarea above");
+  $output.=form_textarea(t("Success Message"), 'emailpage_success_msg', variable_get('emailpage_success_msg', "Your email was sent. Thankyou!"), 40, 10, "This text appears when the user has successfully sent the form");
+  $output.=form_textarea(t("Flood Control Error Msg"), 'emailpage_flood_error_msg', variable_get('emailpage_flood_error_msg', "Sorry, you have reached the maximum number of emails allowed per user. Please try later"), 40, 10, "This text appears if a user tries to email a page but has exceeded the flood control limit.");
+  return $output;
+}
+
+
+
+
+
+
+
+
+
+
+?>

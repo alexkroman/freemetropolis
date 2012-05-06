@@ -1,0 +1,159 @@
+.rsvpalert{
+  color: #f00;
+}
+.rsvpform{
+  margin: 8px;
+}
+.rsvpbox{
+  border: 1px solid #ccc ;
+  padding: .3em;
+  margin-top: 4px;
+}
+.rsvpbox .options{
+  margin: .5em;
+  padding: .3em;
+  border: solid 1px #ff0;
+}
+.rsvpbox .name{
+  padding: .7em;
+  font-size: 1.3em;
+  font-weight: bold;
+}
+.rsvpbox .text_header{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpbox .text{
+  margin-left: .5em;
+  margin-right: .5em;
+  margin-bottom: .5em;
+  padding: .7em;
+  border: 1px solid #ccc ;
+}
+.rsvpbox .blind{
+  padding: .7em;
+  padding-bottom: 0;
+}
+.rsvpbox .list_email{
+  padding: .7em;
+  padding-bottom: 0;
+}
+.rsvpbox .allow_invite{
+  padding: .7em;
+}
+
+.attendeebox{
+  border: 1px solid #ccc ;
+  padding: .7em;
+  margin-top: 4px;
+}
+.attendeebox .attendeeheader{
+  padding-bottom: .5em;
+  font-size: 1.3em;
+  font-weight: bold;
+}
+.attendeebox .attendee{
+  padding: 0em;
+  border: solid 1px #cccs;
+  margin-left: 2em;
+  margin-top: .5em;
+}
+.attendeebox .email{
+  font-size: 1.1em;
+  padding: 0;
+}
+.attendeebox .invited{
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+.attendeebox .received{
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+.attendeebox .response{
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+.attendeebox .responsenone{
+  padding: 0;
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+.attendeebox .responseyes{
+  padding: 0;
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+.attendeebox .responseno{
+  padding: 0;
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+.attendeebox .responsemaybe{
+  padding: 0;
+  padding-left: 4em;
+  padding-bottom: 0;
+}
+
+.rsvpeventbox{
+  border: 1px solid #ccc ;
+  padding: 0;
+  margin-top: 4px;
+}
+.rsvpeventbox .header{
+  margin: .5em;
+  padding: .3em;
+}
+.rsvpeventbox .title{
+  padding: .7em;
+  font-size: 1.3em;
+  font-weight: bold;
+}
+.rsvpeventbox .alert{
+  padding: .7em;
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #C00;
+}
+.rsvpeventbox .date{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+
+.rsvpinvitestatusbox{
+  border: 1px solid #ccc ;
+  padding: .3em;
+  margin-top: 4px;
+}
+.rsvpinvitestatusbox .header{
+  margin: .5em;
+  font-weight: bold;
+}
+.rsvpinvitestatusbox .invited{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpinvitestatusbox .received{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpinvitestatusbox .response{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpinvitestatusbox .responsenone{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpinvitestatusbox .responseyes{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpinvitestatusbox .responseno{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}
+.rsvpinvitestatusbox .responsemaybe{
+  padding-left: .7em;
+  padding-bottom: .1em;
+}

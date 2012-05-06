@@ -1,0 +1,18 @@
+textile.module
+CREDITS
+$Id: CREDITS,v 1.1.6.1 2004/05/29 17:17:35 jhriggs Exp $
+
+Written by
+  - Jim Riggs <drupal at jimandlissa dot com>
+
+Textile.pm written by
+  - Brad Choate <brad at bradchoate dot com>
+
+TextilePHP ported by
+  - Jim Riggs <textile @ jimandlissa dot com>
+
+SmartyPants.pl written by
+  - John Gruber <http://daringfireball.net/>
+
+SmartyPants-PHP ported by
+  - Matthew McGlynn <http://debris.com/>

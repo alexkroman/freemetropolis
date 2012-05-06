@@ -1,0 +1,79 @@
+BODY {
+  background-color: #E3EBD6;
+  margin: 0px;
+  
+}
+
+.bodytext {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  color: #A2AE86;
+}
+
+.submittedby {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  color:#1D396F;
+}
+
+.form {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9px;
+  border: thin solid #FF6600;
+}
+.city {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  font-weight: 300;
+  color: #A2AE86;
+}
+.trail {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  font-variant: small-caps;
+  color: #8D5F59;
+  line-height: 12pt;
+  text-transform: lowercase;
+}
+
+}
+.heading2 {
+  font: 500 small-caps 11px/14px Arial, Helvetica, sans-serif;
+  color: #9D8343;
+}
+.heading1 {
+  font: 500 13px/16px Arial, Helvetica, sans-serif;
+  color: #70302F;
+}
+.heading3 {
+  font: 500 10px Arial, Helvetica, sans-serif;
+  color: #1D396F;
+}
+.submit {
+  font: 500 small-caps 9px Arial, Helvetica, sans-serif;
+  color: #828C6F;
+}
+.rate {
+  font: small-caps normal 10px Arial, Helvetica, sans-serif;
+  color: #032947;
+  vertical-align: top;
+}
+td#index_27 {
+  background: transparent url(misc/index_27.gif) repeat;
+}
+
+.event-calendar th.heading {
+  border-width: 1px 0px;
+  text-align:center;
+}
+.event-calendar th.prev {
+  text-align: left;
+  border-width: 1px 0px 1px 1px;
+}
+.event-calendar th.next {
+  text-align: right;
+  border-width: 1px 1px 1px 0px;
+}

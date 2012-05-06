@@ -1,0 +1,197 @@
+<?php
+// $Id: members.module,v 1.5 2004/10/25 03:11:04 alex Exp $
+
+$GLOBALS['members_fields'] = array('username' => 'username', 'role' => 'role', 'last seen' => 'last_seen', 'privatemsg' => 'privatemsg', 'homepage' => 'homepage', 'blog' => 'blog', 'recent posts' => 'recent_posts', 'avatar' => 'avatar', 'job_title' => 'job_title', 'hire_date' => 'hire_date', 'birthday' => 'birthday', 'office' => 'office', 'business_phone' => 'business_phone', 'first_name' => 'first_name', 'last_name' => 'last_name');
+
+function members_perm() {
+  return array("access members list");
+}
+
+function members_page() {
+
+  if (user_access("access members list")) {
+    
+    // you may specify roles using second url argument. otherwise, use admin pref
+    if (arg(1)) {
+      $roles = explode(',', arg(1));
+    }
+    else {
+      $roles = variable_get("members_roles", array());
+    }
+
+    if ($roles) {
+      // build list of roles for WHERE clause
+      foreach ($roles as $role) {
+        $list[] .= "'". check_query($role) ."'";
+      }
+
+      $list = implode(",", $list);
+      $members_fields = variable_get('members_fields', $GLOBALS['members_fields']);
+	  
+      
+      
+//	    $header[] = array("data" => t(""), "field" => "u.name", "sort" => "asc");
+      
+      
+
+      $sql = "SELECT u.*, r.name AS role FROM {users} u INNER JOIN {role} r ON u.rid = r.rid WHERE r.rid IN ($list) AND status = 1";
+      $result = pager_query($sql, 10);
+      while ($user = db_fetch_object($result)) {
+        $user = drupal_unpack($user);
+		$av = null;
+		
+        if (file_exists($user->profile_avatar)) {
+			$av = '<div class="avatar">' . l('<img height="70" src="'. file_create_url($user->profile_avatar) .'" />',"user/view/$user->uid") . '</div>';
+		}
+	
+		
+		if ($user->profile_gender == 'm') {
+			$user->profile_gender = 'male';
+		}
+		if ($user->profile_gender == 'f') {
+			$user->profile_gender = 'female';
+		}
+		$age = null;
+		
+		if ($user->profile_birthyear) {
+			$age = date("Y", time()) - $user->profile_birthyear;
+		}
+		$line = null;
+		
+		if ($user->profile_gender && $age) {
+			$line = $user->profile_gender . ", " . $age . "<br />";
+		}
+		
+		$update = null;
+		$diff = time() - $user->timestamp;
+		if ($diff < 86400) {
+			$update = " (updated)";
+			
+		}
+		
+		
+		
+        $profile = 
+			$av . format_name($user) . "$update<br />" .
+			$line . 
+			"<strong>Interests:</strong> " . $user->profile_interests . "<br />" . 
+			"<strong>Last Seen:</strong> " . member_interval(time() - $user->timestamp, 2) . ' ago<br /><br />' . 
+			l("message","privatemsg/msgto/$user->uid") . " | " . l("add as friend", "friendlist/add/$user->uid") . " | " . l('view blog',"blog/$user->uid") . "<br />";
+		
+       
+		$row[] = $profile;
+		
+        // if (in_array('first_name', $members_fields)) {
+//           $row[] = l($user->first_name, "user/view/$user->uid");
+//         }
+//         if (in_array('last_name', $members_fields)) {
+//           $row[] = l($user->last_name, "user/view/$user->uid");
+//         }
+
+//         if (in_array('last seen', $members_fields)) {
+//           $row[] = member_interval(time() - $user->timestamp, 2);
+//         }
+//         if (variable_get("members_email", false)) {
+//           $row[] = "<a href=\"mailto:$user->mail\">$user->mail</a></td>";
+//         }
+//         if (in_array('business_phone', $members_fields)) {
+//           $row[] = $user->business_phone;
+//         }
+//         if (in_array('job_title', $members_fields)) {
+//           $row[] = $user->job_title;
+//         }
+//         if (in_array('office', $members_fields)) {
+//           $row[] = $user->office;
+//         }
+//         if (in_array('privatemsg', $members_fields) && module_exist("privatemsg")) {
+//           $row[] = l(t('send message'), "privatemsg/msgto/$user->uid");
+//         }
+//         if (in_array('homepage', $members_fields) && module_exist("profile")) {
+//           $url = (strlen($user->profile_homepage) > 30) ? substr($user->profile_homepage, 0, 30) ."..." : $user->profile_homepage;
+//           $row[] = "<a href=\"$user->profile_homepage\">$url</a>";
+//         }
+//         if (in_array('blog', $members_fields) && module_exist("blog") && user_access("access content")) {
+//           $row[] = l(t("blog"), "blog/$user->uid");
+//         }
+//         if (in_array('recent posts', $members_fields) && module_exist("tracker") && user_access("access content")) {
+//           $row[] = l(t("posts"), "tracker/$user->uid");
+//         }
+//         if (in_array('avatar', $members_fields) && module_exist("profile") && !$_REQUEST['lean']) {
+//           if (file_exists($user->profile_avatar)) {
+//             $av = '<div class="avatar"><img height="70" src="'. file_create_url($user->profile_avatar) .'" /></div>';
+//             $row[] = l($av, "user/view/$user->uid", array("title" => t("View user profile.")));
+//           }
+//           else {
+//             $row[] = '&nbsp;';
+//           }
+//         }
+        
+        $rows[] = $row;
+        unset($row);
+      }
+
+      if ($pager = theme("pager", NULL, 10, 0, tablesort_pager())) {
+        $rows[] = array(array("data" => $pager, "colspan" => count($header)));
+      }
+	  $breadcrumbs[] = l('home','');
+	  
+	  $breadcrumbs[] = l('people','members');
+	  drupal_set_breadcrumb($breadcrumbs);
+	  
+      $output = '<div id="members-main">'. theme("table", $header, $rows) .'</div>';
+      print theme("page", $output);
+    }
+    else {
+      print theme("page", t("Warning: there aren't any users with roles configured to be shown here."));
+    }
+  }
+  else {
+    print theme("page", message_access());
+  }
+
+}
+
+function members_help($section) {
+  $output = '';
+  if ($section == 'admin/system/modules#description') {
+    $output .= 'Enables users to list all members.';
+  }
+  return $output;
+}
+
+function members_settings() {
+  $output = form_select(t("Roles to show"), "members_roles", variable_get("members_roles", array()), user_roles(1), t("Select roles to show in the members listing."), 0, 1);
+  $output .= form_select(t("Columns to show"), "members_fields", variable_get("members_fields", $GLOBALS['members_fields']), $GLOBALS['members_fields'], t("Select the fields which should be displayed on your members overview page. Note that some fields require certain modules to be active."), 0, 1);
+  $output .= form_checkbox(t("Display e-mail"), "members_email", 1, variable_get("members_email", 0), t("Display members emails on the members list."));
+
+  return $output;
+}
+
+function members_link($type) {
+
+  if ($type == "page" && user_access("access members list")) {
+	  $links[] = l(t("people"), "members", -1, MENU_HIDE);
+  }
+  
+  if ($type == "system" && user_access("access members list")) {
+	  menu("members", t("people"), "members_page", -1, MENU_HIDE);
+  }
+
+  return $links ? $links : array();
+}
+
+function member_interval($timestamp, $max = 0) {
+  $units = array('1 year|%count years' => 31536000, '1 week|%count weeks' => 604800, '1 day|%count days' => 86400, '1 hour|%count hours' => 3600, '1 min|%count min' => 60, '1 sec|%count sec' => 1);
+  foreach ($units as $key => $value) {
+    $key = explode('|', $key);
+    if ($timestamp >= $value) {
+      $output .= ($output ? ' ' : '') . format_plural(floor($timestamp / $value), $key[0], $key[1]);
+      $timestamp %= $value;
+      if (++$level == $max) {
+        break;
+      }
+    }
+  }
+  return ($output) ? $output : t('0 sec');
+}
+?>

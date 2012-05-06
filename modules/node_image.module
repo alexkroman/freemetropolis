@@ -1,0 +1,612 @@
+<?php
+
+// drupal_set_html_head("<style type=\"text/css\">.node-image{border: 1px solid rgb(0,0,0);}</style>\n");
+
+function _node_image_get_ext($filename) {
+  return strtolower(strrchr($filename, "."));
+}
+
+function node_image_override($node, $file){
+  if(variable_get("node_image_override", 1)){
+    if(!(empty($node->description))){
+      $str_len = strlen($node->description);
+    }
+    else{
+      $str_len = strlen($node->body);      
+    }
+    $size = getimagesize($file);
+    $ch_lin = (variable_get("node_image_override_textwidth", 660) - $size[0]) * variable_get("node_image_override_ch_width", 0.11);
+    $px_lin = ($size[1] / variable_get("node_image_override_lineheight", 13));
+    $str_len = (($str_len) - variable_get("node_image_override_margin", 40));
+    if($str_len > $ch_lin * $px_lin){
+      return false;
+    }
+    else{
+      return true;
+    }
+  }
+  else{
+    return false;
+  }
+}
+
+function node_image_get_parents($tid) {
+  if ($tid) {
+    $parents[] = taxonomy_get_term($tid);
+  }
+  $n = 0;
+  while ($parent = taxonomy_get_parents($parents[$n]->tid)) {
+    $parents = array_merge($parents, $parent);
+    $n++;
+  }
+
+  return $parents;
+}
+
+//this doesn't work.  it would be nice to have a way to reset form parameters for nodes...
+function node_image_form(&$node, &$error, &$param) {
+  // Set form parameters so we can accept file uploads.
+  $param['options'] = array('enctype' => 'multipart/form-data');
+}
+
+function node_image_perm() {
+  return array("create node and term images");
+}
+
+// Return image.  $format is "full" for full node image, "summ" for thumbnail with link to node
+function node_image_get_image($node, $type = "node", $format = "full") {
+  if($type == "node") {
+    $valid_types = variable_get("node_image_image_node_types", array("story","page","book")); 
+    if (!in_array($node->type, $valid_types)) { 
+      return ""; 
+    }
+  }
+  $extensions = explode(",", variable_get("node_image_extensions",".jpg,.jpeg,.gif,.png"));
+  $al = variable_get("node_image_alignment", "right");
+  $out = "";
+  switch($type){
+    case "node":
+      $link_path = "node/view/";
+      $id = $node->nid;
+      $title = strip_tags($node->title);
+      break;
+    case "term":
+      $link_path = "taxonomy/view/or/";
+      $id = $node->tid;
+      $title = strip_tags($node->title);
+      break;
+  }
+  $path = variable_get("node_image_node_dir", "images/node/");
+  foreach ($extensions as $extension) {
+    $file = $path . $node->nid . "_" . $format . $extension;
+    if (file_exists($file)) {
+      $size = getimagesize ($file);
+      switch($format){
+        case "summ":
+//          $out = l("<img src=\"$file\" {$size[3]} class=\"node-image\" style=\"float:left;\" vspace=\"0\" hspace=\"5\" border=\"0\" alt=\"" . $title . "\" title=\"" . $title . "\" />",$link_path . $id)."\n";
+          $out = "<img src=\"$file\" {$size[3]} class=\"node-image\" style=\"float:left;\" vspace=\"0\" hspace=\"5\" border=\"0\" alt=\"" . $title . "\" title=\"" . $title . "\" />\n";
+          break;
+        case "full":
+          $out = "<img src=\"$file\" {$size[3]} class=\"node-image\" align=\"$al\" vspace=\"0\" hspace=\"5\" border=\"0\" alt=\"" . $title . "\" title=\"" . $title . "\" />\n";
+          break;
+        default:
+          break;
+      }
+    }          
+  }
+  if(($type == "node") && ($out == "") && variable_get("node_image_substitute_nodes",1)){
+    $tids = taxonomy_node_get_terms($node->nid);
+    foreach($tids as $tid){
+      $node->tid = $tid->tid;
+      break;
+    }
+  }
+  if(!(empty($node->tid))){
+    $path = variable_get("node_image_term_dir", "images/term/");
+    if($parents = node_image_get_parents($node->tid)){
+      $i = 0;
+      foreach($parents as $parent){
+        foreach ($extensions as $extension) {
+          $file = $path . $parent->tid . "_" . $format . $extension;
+          if (file_exists($file)) {
+            $size = getimagesize ($file);
+            switch($format){
+              case "summ":
+                $out = "<img src=\"$file\" {$size[3]} class=\"node-image\" style=\"float:left;\" vspace=\"0\" hspace=\"5\" border=\"0\" alt=\"" . $title . "\" title=\"" . $title . "\" />\n";
+//                $out = l("<img src=\"$file\" {$size[3]} class=\"node-image\" style=\"float:left;\" vspace=\"0\" hspace=\"5\" border=\"0\" alt=\"" . $title . "\" title=\"" . $title . "\" />",$link_path . $id)."\n";
+                break;
+              case "full":
+                if(!node_image_override($node, $file) || ($type == "node")){
+                  $out = "<img src=\"$file\" {$size[3]} class=\"node-image\" align=\"$al\" vspace=\"0\" hspace=\"5\" border=\"0\" alt=\"" . $title . "\" title=\"" . $title . "\" />\n";
+                }
+                break;
+              default:
+                break;
+            }
+          }
+          if($out != ""){
+            break;
+          }          
+        }
+        if($out != ""){
+          break;
+        }
+        else if(($i == 0) && (!variable_get("node_image_substitute_terms",1))){
+          break;
+        }
+        $i++;
+      }
+    }
+  }
+  return $out;
+}
+
+function node_image_file_exists($id, $type = "node", $format = "full") {
+  $extensions = explode(",", variable_get("node_image_extensions",".jpg,.jpeg,.gif,.png"));
+  $path = variable_get("node_image_$type_dir", "images/$type/");
+  foreach ($extensions as $extension) {
+    switch($type){
+      case "node":
+        $file = $path . $id . "_" . $format . $extension;
+        break;
+      case "term":
+        $file = $path . $id . "_" . $format . $extension;
+        break;
+    }
+    if (file_exists($file)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function node_image_help($section = "admin/help#node_image") {
+  $output = "";
+
+  switch ($section) {
+
+    case 'admin/help#node_image':
+      $output = t("<p>This module can be used to include images for each node and taxonomy term.  It has to be called by themes or other modules.  For example usage, see the taxonomy_context module.</p>");
+      break;
+    case 'admin/system/modules#description':
+      $output = t("A utility module to associate an image with each node and taxonomy term.");
+      break;
+  }
+
+  return $output;
+}
+
+function node_image_nodeapi(&$node, $op, $arg = 0) {
+
+  if(!user_access("create node and term images")){
+    return;
+  }
+  switch ($op) {
+
+    case "form post":
+      $valid_types = variable_get("node_image_image_node_types", array("story","page","book")); 
+      if(!in_array($node->type, $valid_types)) {
+        return;
+      }
+
+      if(variable_get("node_image_inline_upload", 1)) {
+        if(variable_get("node_image_embed_scripts", 0)) {
+          $output .= "<script language=\"JavaScript\">\n";
+          $response = file("modules/node_image/addImage.js");
+          $output .= implode("", $response);
+          $output .= "</script>\n";
+        }
+        else {
+          $output .= "<script language=\"JavaScript\" src=\"modules/node_image/addImage.js\"></script>";
+        }
+        $output .= "<input type=\"button\" value=\"Upload Picture\" onclick=\"node_image_popitup('" . url("node_image/popup_add") . "');\"><br /><br />";
+      }
+      if(variable_get("node_image_fields", 0)) {
+        $output .= form_file("Image", "full_image", 50, t("Image file to accompany node.  Click \"Browse...\" to select an image to upload."));
+        $output .= form_file("Image thumbnail", "summ_image", 50, t("Image thumbnail file to accompany node.  Click \"Browse...\" to select an image to upload."));
+      }
+      return $output;
+      break;
+    case "insert":
+      $exts = explode(",", variable_get("node_image_extensions", ".jpg,.jpeg,.gif,.png"));
+      $full_upload_name = $_FILES["edit"]["name"]["full_image"];
+      $full_ext = _node_image_get_ext($full_upload_name);
+      if(in_array($full_ext, $exts)){
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['full_image'], variable_get("node_image_node_dir", "images/node/") . $node->nid . "_full" . $full_ext)) {
+          $output .= "Image file was successfully uploaded.<br />\n";
+          $output .= "<img src=\"" . variable_get("node_image_node_dir", "images/node/") . $node->nid . "_full" . $full_ext . "\"/><br />\n";
+        }
+        else{
+			// $output .= "Error. Full image file not uploaded.<br />\n";
+        }
+      }
+      else{
+		  //$output .= "Full image file not uploaded.<br />\n";
+      }
+      $summ_upload_name = $_FILES["edit"]["name"]["summ_image"];
+      $summ_ext = _node_image_get_ext($summ_upload_name);
+      if(in_array($summ_ext, $exts)){
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['summ_image'], variable_get("node_image_node_dir", "images/node/") . $node->nid . "_summ" . $full_ext)) {
+          $output .= "Image thumbnail file was successfully uploaded.<br />\n";
+          $output .= "<img src=\"" . variable_get("node_image_node_dir", "images/node/") . $node->nid . "_summ" . $summ_ext . "\"/><br />\n";
+        }
+        else{
+			//$output .= "Error.  Thumbnail image file not uploaded.<br />\n";
+        }
+      }
+      else{
+		  //  $output .= "Thumbnail image file not uploaded.<br />\n";
+      }
+      //drupal_set_message(t($output));
+      break;
+    case "update":
+      $exts = explode(",", variable_get("node_image_extensions", ".jpg,.jpeg,.gif,.png"));
+      $full_upload_name = $_FILES["edit"]["name"]["full_image"];
+      $full_ext = _node_image_get_ext($full_upload_name);
+      if(in_array($full_ext, $exts)){
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['full_image'], variable_get("node_image_node_dir", "images/node/") . $node->nid . "_full" . $full_ext)) {
+          "Image file was successfully uploaded.<br />\n";
+          $output .= "<img src=\"" . variable_get("node_image_node_dir", "images/node/") . $node->nid . "_full" . $full_ext . "\"/><br />\n";
+        }
+        else{
+          $output .= "Full image file not uploaded.<br />\n";
+        }
+      }
+      else{
+        $output .= "Full image file not uploaded.\n";
+      }
+      $summ_upload_name = $_FILES["edit"]["name"]["summ_image"];
+      $summ_ext = _node_image_get_ext($summ_upload_name);
+      if(in_array($summ_ext, $exts)){
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['summ_image'], variable_get("node_image_node_dir", "images/node/") . $node->nid . "_summ" . $full_ext)) {
+          $output .= "Image thumbnail file was successfully uploaded.<br />\n";
+          $output .= "<img src=\"" . variable_get("node_image_node_dir", "images/node/") . $node->nid . "_summ" . $summ_ext . "\"/><br />\n";
+        }
+        else{
+          $output .= "Thumbnail image file not uploaded.<br />\n";
+        }
+      }
+      else{
+        $output .= "Thumbnail image file not uploaded.<br />\n";
+      }
+      //drupal_set_message(t($output));
+      break;
+  }
+}
+
+function node_image_link($type, $node = 0, $main = 0) {
+  if ($type == 'system') {
+    if (user_access("create node and term images")) {
+      if(variable_get("node_image_show_menu", 0)) {
+        menu("node_image", t("node image"), "node_image_page", 0);
+      }
+      else {
+        menu("node_image", t("node image"), "node_image_page", 0, MENU_HIDE);
+      }
+    }
+  }
+  $valid_types = variable_get("node_image_image_node_types", array("story","page","book")); 
+  //if ($type == "blog" && in_array($node->type, $valid_types) && user_access("create node and term images")) {
+    if(!node_image_file_exists($node->nid,"node","full")){
+      $str = "add images";
+    }
+    else{
+      $str = "replace images";
+    }
+	// $links[] = l($str, "node_image/add/node/" . $node->nid);
+  
+  return $links;
+}
+
+function node_image_taxonomy($op, $type, $object) {
+  if ($type == "term" && ($op == "insert" || $op == "update") && user_access("create node and term images")) {
+    if(!node_image_file_exists($object["tid"],"term","full")){
+      $str = "add images to";
+    }
+    else{
+      $str = "replace images for";
+    }
+    $output .= l($str . " term " . $object["name"], "node_image/add/term/" . $object["tid"]) . "<br /><br />";
+  }
+  //drupal_set_message(t($output));
+}
+
+function node_image_page(){
+  if (!user_access("create node and term images")) {
+    $title = t("Not authorized to add images");
+    $output = t("Sorry, you're not authorized to add images");
+    print theme("page", $output, $title);
+    return;
+  }
+  $op = $_POST["edit"]["op"];
+  if (empty($op)) {
+    $op = arg(1);
+  }
+  if (empty($op)) {
+    $op = "upload";
+  }
+  $image_type = $_POST["edit"]["image_type"];
+  if (empty($image_type)) {
+    $image_type = arg(2);
+  }
+  $image_id = $_POST["edit"]["image_id"];
+  if (empty($image_id)) {
+    $image_id = arg(3);
+  }
+  if(($op == "save") || ($op == "add")){
+    $title = t("Add images to " . $image_type);
+  }
+  switch($op){
+    case "save":
+      $success = false;
+      $exts = explode(",", variable_get("node_image_extensions", ".jpg,.jpeg,.gif,.png"));
+      $full_upload_name = $_FILES["edit"]["name"]["full_image"];
+      $full_ext = _node_image_get_ext($full_upload_name);
+      if(in_array($full_ext, $exts)){
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['full_image'], variable_get("node_image_" . $image_type . "_dir", "images/" . $image_type . "/") . $image_id . "_full" . $full_ext)) {
+          $output .= "<p>Image file was successfully uploaded.</p>\n";
+          $output .= "<img src=\"" . variable_get("node_image_" . $image_type . "_dir", "images/" . $image_type . "/") . $image_id . "_full" . $full_ext . "\"/><br />\n";
+          $success = true;
+        }
+        else{
+			//$output .= "<p>Full image file not uploaded.</p>\n";
+        }
+      }
+      else{
+		  //$output .= "<p>Full image file not uploaded.</p>\n";
+      }
+      $summ_upload_name = $_FILES["edit"]["name"]["summ_image"];
+      $summ_ext = _node_image_get_ext($summ_upload_name);
+      if(in_array($summ_ext, $exts)){
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['summ_image'], variable_get("node_image_" . $image_type . "_dir", "images/" . $image_type . "/") . $image_id . "_summ" . $summ_ext)) {
+          $output .= "<p>Image thumbnail file was successfully uploaded.</p>\n";
+          $output .= "<img src=\"" . variable_get("node_image_" . $image_type . "_dir", "images/" . $image_type . "/") . $image_id . "_summ" . $summ_ext . "\"/><br />\n";
+          $success = true;
+        }
+        else{
+			//  $output .= "<p>Thumbnail image file not uploaded.</p>\n";
+        }
+      }
+      else{
+        $output .= "<p>Thumbnail image file not uploaded.</p>\n";
+      }
+      if($success){
+        switch($image_type){
+          case "term":
+            $output .= "<p>" . l("View term", "taxonomy/view/or/$image_id") . "</p>";
+            break;
+          case "node":
+            $output .= "<p>" . l("View node", "node/view/$image_id") . "</p>";
+            break;
+        }
+      }
+      else{
+        $output .= "No files uploaded.<br />";
+      }
+      switch($image_type){
+        case "node":
+          $conditions["nid"] = $image_id;
+          $node = node_load($conditions);
+          $output .= "<hr /><div class=\"title\">Add/replace images for node \"" . $node->title . "\".</div>";
+          break;
+        case "term":
+          $term = taxonomy_get_term($image_id);
+          $output .= "<hr /><div class=\"title\">Add/replace images for term \"" . $term->name . "\".</div>";
+          break;
+      }
+      $output .= node_image_get_form($image_type, $image_id);
+      break;
+    case "add":
+      switch($image_type){
+        case "node":
+          $conditions["nid"] = $image_id;
+          $node = node_load($conditions);
+          $output .= "<div class=\"title\">Add images to node \"" . $node->title . "\".</div>";
+          break;
+        case "term":
+          $term = taxonomy_get_term($image_id);
+          $output .= "<div class=\"title\">Add images to term \"" . $term->name . "\".</div>";
+          break;
+      }
+      $output .= node_image_get_form($image_type, $image_id);
+      break;
+    case "upload":
+      $output .= node_image_get_upload_form();
+      $title =  t("Upload image file");
+      break;
+    case "upload_save";
+      $exts = explode(",", variable_get("node_image_extensions", ".jpg,.jpeg,.gif,.png"));
+      $upload_name = $_FILES["edit"]["name"]["image"];
+      $ext = _node_image_get_ext($upload_name);
+      if(file_exists(variable_get("node_image_main_dir", "images/") . $upload_name)) {
+        $upload_name = node_image_get_available_filename(variable_get("node_image_main_dir", "images/") . $upload_name);
+      }
+      if(in_array($ext, $exts)) {
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['image'], variable_get("node_image_main_dir", "images/") . $upload_name)) {
+          drupal_set_message(t("File saved.") . "<img src=\"" . variable_get("node_image_main_dir", "images/") . $upload_name . "\"/><br />\n");
+        }
+        else {
+          $output .= "<p>" . t("Sorry, image upload failed.") . "</p>\n";
+        }
+      }
+      else{
+        $output .= "<p>" . t("Sorry, image upload failed.  Image type not supported.") . "</p>\n";
+      }
+      $title = t("Upload results");
+      break;
+    case "popup_add":
+      $output .= node_image_header($op);
+      $output .= node_image_get_popup_form($image_type, $image_id);
+      $output .= node_image_foot($op);
+      break;
+    case "popup_save":
+      $output .= node_image_header($op);
+      $exts = explode(",", variable_get("node_image_extensions", ".jpg,.jpeg,.gif,.png"));
+      $upload_name = $_FILES["edit"]["name"]["image"];
+      $ext = _node_image_get_ext($upload_name);
+      if(file_exists(variable_get("node_image_main_dir", "images/") . $upload_name)) {
+        $upload_name = node_image_get_available_filename(variable_get("node_image_main_dir", "images/") . $upload_name);
+      }
+      if(in_array($ext, $exts)) {
+        if (move_uploaded_file($_FILES['edit']['tmp_name']['image'], variable_get("node_image_main_dir", "images/") . $upload_name)) {
+          $output .= node_image_get_settings_form(variable_get("node_image_main_dir", "images/"), $upload_name);
+        }
+        else {
+          $output .= "<p>" . t("Sorry, image upload failed.</p>") . "\n";
+          $output .= "<p><a href=\"#\" onclick=\"window.close()\">" . t("Close window") . "</a></p>";
+        }
+      }
+      else{
+        $output .= "<p>" . t("Sorry, image upload failed.  Image type not supported.") . "</p>\n";
+        $output .= "<p><a href=\"#\" onclick=\"window.close()\">" . t("Close window") . "</a></p>";
+      }
+      $output .= node_image_foot($op);
+      break;
+  }
+  if(($op == "save") || ($op == "add") || ($op == "upload") || ($op == "upload_save")) {
+    print theme("page", $output, $title);
+  }
+  else {
+    echo $output;
+  }
+}
+
+function node_image_get_available_filename($path) {
+  $filename = basename(strval($path));
+  $ext = _node_image_get_ext($filename);
+  $basename = basename(strval($filename), $ext);
+  $dir = dirname(strval($path));
+  $i = 0;
+  $name_available = false;
+  while(!$name_available){
+    $upload_name = $basename . "_" . $i . $ext;
+    if(file_exists($dir . $upload_name)) {
+      $i++;
+    }
+    else {
+      $name_available = true;
+    }
+  }
+  return $upload_name;
+}
+
+function node_image_header($op) {
+  $output = "<html>\n<head>\n";
+  switch($op) {
+    case "popup_add":
+      $output .= "<title>" . t("Select image for upload") . "</title>";
+      break;
+    case "popup_save":
+      $output .= "<title>" . t("Set image properties") . "</title>";
+      if(variable_get("node_image_embed_scripts", 0)) {
+        $output .= "<script language=\"JavaScript\">\n";
+        $response = file("modules/node_image/transferImage.js");
+        $output .= implode("", $response);
+        $output .= "</script>\n";
+      }
+      else {
+        $output .= "<script language=\"JavaScript\" src=\"modules/node_image/transferImage.js\"></script>";
+      }
+      break;
+  }
+  $output .= "</head>\n<body>";
+  return $output;
+}
+
+function node_image_foot($op) {
+  return "</body>\n</html>";
+}
+
+function node_image_get_form($image_type, $image_id){
+  $output .= form_hidden("op", "save");  
+  $output .= form_hidden("image_id", $image_id);
+  $output .= form_hidden("image_type", $image_type);
+  $output .= form_file("Image", "full_image", 50, t("Image file to accompany node.  Click \"Browse...\" to select an image to upload."));
+  $output .= form_file("Image thumbnail", "summ_image", 50, t("Image thumbnail file to accompany node.  Click \"Browse...\" to select an image to upload."));
+  $output .= form_submit("Upload", "submit");
+  return form($output, "post", url("node_image"), array("enctype" => "multipart/form-data"));
+}
+
+function node_image_get_popup_form($image_type, $image_id) {
+	$output .= '<link rel="stylesheet" type="text/css" href="css/text.css" />
+<link rel="stylesheet" type="text/css" href="css/layout.css" /><style>BODY { padding: 10px; } </style>';
+	
+	$output .= form_hidden("op", "popup_save");
+	$output .= "Hello, <br />Free Metropolis is not smart enough to resize your images for you yet so if you wouldn't mind can you make sure your photography isn't wider then 400 pixels?  <br /><br />Thanks, <br />Alex";
+	
+	$output .= form_file("Image", "image", 50, t("Image file to accompany blog.  Click \"Browse...\" to select an image to upload."));
+	$output .= "<br /><br />" . form_submit("Upload", "submit");
+	return form($output, "post", url("node_image/popup_save"), array("enctype" => "multipart/form-data"));
+}
+
+function node_image_get_upload_form() {
+  $output .= form_hidden("op", "upload_save");
+  $output .= form_file("Image", "image", 20, t("Click \"Browse...\" to select an image to upload."));
+  $output .= form_submit("Upload", "submit");
+  return form($output, "post", url("node_image/upload_save"), array("enctype" => "multipart/form-data"));
+}
+
+function node_image_get_settings_form($dir, $file_name) {
+  $file = $dir . $file_name;
+  if (file_exists($file)) {
+    $size = getimagesize ($file);
+  }
+  else {
+    $output .= "<script type=\"text/javascript\"\n";
+    $output .= "uploadFailed();";
+    $output .= "</script>";
+  }
+	$output .= '<link rel="stylesheet" type="text/css" href="css/text.css" />
+<link rel="stylesheet" type="text/css" href="css/layout.css" />';
+  $output .= form_hidden("width", $size[0]);
+  $output .= form_hidden("height", $size[1]);
+  $output .= form_hidden("src", $dir . $file_name);
+  $output .= form_textfield("Name your image", "title", "", 20, 150);
+  $output .= form_select("Alignment", "align", "none", array(t("none")=>t("none"), t("top")=>t("top"), t("right")=>t("right"), t("left")=>t("left")));
+  $output .= "<br /><input type=\"button\" value=\"Attach Image to Blog Entry\" onclick=\"node_image_transferImageRef();\">";
+  return form($output, null, null, array("name"=>"transferForm"));
+}
+
+function node_image_settings() {
+  if(!file_exists(variable_get("node_image_main_dir", "images/"))) {
+    $output .= "<p>" . t("Warning: Main image directory doesn't exist!  To enable upload of inline images, create the directory and ensure it is writable by the web process.") . "</p>";
+  }
+  elseif(!is_writable(variable_get("node_image_main_dir", "images/"))) {
+    $output .= "<p>" . t("Warning: Main image directory is not writable!  To enable upload of inline images, ensure that the directory is writable by the web process.") . "</p>";
+  }
+  $output .= form_textfield("Path to inline images", "node_image_main_dir", variable_get("node_image_main_dir", "images/"), 30, 150, "Directory must be writable by the web server process.  Don't forget the trailing /.");
+
+  if(!file_exists(variable_get("node_image_node_dir", "images/node/"))) {
+    $output .= "<p>" . t("Warning: Node image directory doesn't exist!  To enable association of images with nodes, create the directory and ensure it is writable by the web process.") . "</p>";
+  }
+  elseif(!is_writable(variable_get("node_image_node_dir", "images/node/"))) {
+    $output .= "<p>" . t("Warning: Node image directory is not writable!  To enable association of images with nodes, ensure that the directory is writable by the web process.") . "</p>";
+  }
+  $output .= form_textfield("Path to node images", "node_image_node_dir", variable_get("node_image_node_dir", "images/node/"), 30, 150, "Directory must be writable by the web server process.  Don't forget the trailing /.");
+  if(!file_exists(variable_get("node_image_term_dir", "images/term/"))) {
+    $output .= "<p>" . t("Warning: Term image directory doesn't exist!  To enable association of images with terms, create the directory and ensure it is writable by the web process.") . "</p>";
+  }
+  elseif(!is_writable(variable_get("node_image_term_dir", "images/term/"))) {
+    $output .= "<p>" . t("Warning: Term image directory is not writable!  To enable association of images with terms, ensure that the directory is writable by the web process.") . "</p>";
+  }
+  $output .= form_textfield(t("Path to term images"), "node_image_term_dir", variable_get("node_image_term_dir", "images/term/"), 30, 150, t("Directory must be writable by the web server process.  Don't forget the trailing /."));
+  foreach (node_list() as $type) {
+    $nodetypes[$type] = node_invoke($type, "node_name");
+  }
+  $output .= form_select(t("Imaged Nodes"), "node_image_image_node_types", variable_get('node_image_image_node_types', array('story','page','book')), $nodetypes, t("Which nodes can have images attached?"), 0, 1);
+  $output .= form_select(t("Add inline upload button to node forms"), "node_image_inline_upload", variable_get("node_image_inline_upload", 1), array(t("Disabled"), t("Enabled")), t("Include \"Add inline image\" button on node forms.  Clicking this button will open a window for file upload, including creation of img text for inclusion in node body (requires Javascript enabled in browser)."));
+  $output .= form_select(t("Embed scripts"), "node_image_embed_scripts", variable_get("node_image_embed_scripts", 0), array(t("Disabled"), t("Enabled")), t("By default, the javascript scripts needed to transfer image formatting are in external files.  However, in some server contexts, this seems to generate errors.  If you're having trouble with javascript, try enabling this setting to have javascript files embedded rather than externally linked."));
+  $output .= form_select(t("Add fields to node forms"), "node_image_fields", variable_get("node_image_fields", 0), array(t("Disabled"), t("Enabled")), t("Add image upload fields to node create and edit forms.  Note: if you enable this functionality, you must apply a patch to the node.module; see INSTALL file."));
+  $output .= form_select(t("Use terms where no node images"), "node_image_substitute_nodes", variable_get("node_image_substitute_nodes", 1), array(t("Disabled"), t("Enabled")), t("Enable this option to substitute images from the containing term where a node has no images of its own."));
+  $output .= form_select(t("Use parent terms where term empty"), "node_image_substitute_terms", variable_get("node_image_substitute_terms", 1), array(t("Disabled"), t("Enabled")), t("Enable this option to go up the term hierarchy and substitute images from the first available parent term where a term has no images of its own."));
+  $output .= form_textfield(t("Supported file extensions"), "node_image_extensions", variable_get("node_image_extensions", ".jpg,.jpeg,.gif,.png"), 30, 150, t("Separate supported extensions with commas."));
+  $output .= form_select(t("Image alignment"), "node_image_alignment", variable_get("node_image_alignment", "right"), array(t("right")=>t("right"), t("left")=>t("left")), t("Alignment of images for full node display."));
+  $output .= form_select(t("Show menu link"), "node_image_show_menu", variable_get("node_image_show_menu", 0), array(t("Disabled"), t("Enabled")), t("Add a link to the navigation menu for image uploads."));
+  $output .= form_select(t("Hide too large images"), "node_image_override", variable_get("node_image_override", 0), array(t("Disabled"), t("Enabled")), t("Do not display images if there is not sufficient node text to wrap around them."));
+  $output .= form_textfield(t("Text area width"), "node_image_override_textwidth", variable_get("node_image_override_textwidth", 660), 10, 15, t("Width of text area where taxonomy term description will appear, in pixels.  This figure is used to calculate if an image should be hidden."));
+  $output .= form_textfield(t("Character width"), "node_image_override_ch_width", variable_get("node_image_override_ch_width", 0.11), 10, 15, t("Average width of a character in taxonomy term description, in pixels.  This figure is used to calculate if an image should be hidden."));
+  $output .= form_textfield(t("Line height"), "node_image_override_lineheight", variable_get("node_image_override_lineheight", 13), 10, 15, t("Height of a line of characters in taxonomy term description, in pixels.  This figure is used to calculate if an image should be hidden."));
+  $output .= form_textfield(t("Error margin"), "node_image_override_margin", variable_get("node_image_override_margin", 40), 10, 15, t("Margin of error for image hiding, in characters.  Increase this number to make it more likely images will be hidden."));
+  return $output;
+}
+?>

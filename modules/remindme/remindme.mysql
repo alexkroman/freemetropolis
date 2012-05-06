@@ -1,0 +1,11 @@
+#// $Id: remindme.mysql,v 1.2 2003/07/06 15:09:12 killes Exp $
+CREATE TABLE remindme_term (
+  uid int(10) unsigned NOT NULL default '0',
+  tid int(10) unsigned NOT NULL default '0',
+  timestamp int(10) unsigned NOT NULL default '0'
+);
+CREATE TABLE remindme_node (
+  uid int(10) unsigned NOT NULL default '0',
+  nid int(10) unsigned NOT NULL default '0',
+  timestamp int(10) unsigned NOT NULL default '0'
+);

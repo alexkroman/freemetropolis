@@ -1,0 +1,224 @@
+<?php
+/* $Id: trackback.module,v 1.3 2004/09/26 23:46:07 alex Exp $ */
+
+function trackback_help($section) {
+  switch ($section) {
+    case 'admin/system/modules#description':
+      return t("Allow for sending and receiving TrackBacks, which is a way for sites to notify another that they have commented on a post.");
+  }
+}
+
+function trackback_send($node) {
+  $params = array(
+    "title" => $node->title,
+    "excerpt" => substr(check_output($node->teaser), 0, 255),
+    "blog_name" => variable_get("site_name", ""),
+    "url" => url("node/view/$node->nid", NULL, NULL, 1)
+  );
+
+  foreach ($params as $key => $value) {
+    $str[] = "$key=". urlencode($value);
+  }
+
+  return drupal_http(
+    $node->tb_url,
+    $headers = array("Content-Type" => "application/x-www-form-urlencoded"),
+    "POST",
+    implode("&", $str)
+  );
+}
+
+function trackback_receive($node) {
+  // Process TrackBack post data.
+  $trackback->url = check_url($_REQUEST["url"]);
+  if ($trackback->url) {
+    $trackback->excerpt = (strlen($_REQUEST["excerpt"] > 255) ? substr($_REQUEST["excerpt"], 0, 252) ."..." : $_REQUEST["excerpt"]);
+    $trackback->name = ($_REQUEST["blog_name"]) ? $_REQUEST["blog_name"] : $trackback->url;
+
+    // Save TrackBack as comment
+    // TODO: Make a comment_insert in the comment module to prevent duplication of code here.
+    $subject = ($_REQUEST["title"]) ? $_REQUEST["title"] : $trackback->url;
+    $comment = "<strong>". t("TrackBack from %url", array("%url" => "<a href=\"$trackback->url\">$trackback->name</a>")) .":</strong><br />";
+    $comment .= "<blockquote>$trackback->excerpt</blockquote>";
+    $cid = db_next_id("{comments}_cid");
+    $thread = rtrim(db_result(db_query("SELECT MAX(thread) FROM {comments} WHERE nid = %d", $node->nid)), "/") + 1;
+    db_query("INSERT INTO {comments} (cid, nid, pid, uid, subject, comment, hostname, timestamp, status, score, users, thread) VALUES (%d, %d, %d, %d, '%s', '%s', '%s', %d, %d, %d, '%s', '%d/')",
+             $cid, $node->nid, 0, 0, $subject, $comment, getenv("REMOTE_ADDR"), time(), 0, 0, '', $thread);
+    watchdog("special", t("trackback: added '%subject'", array("%subject" => $subject)), l(t("view comment"), "node/view/". $node->nid ."#". $cid));
+    $error = 0;
+  }
+  else {
+    $error = 1;
+    $message = t("Missing TrackBack url.");
+  }
+
+  // Generate response
+  $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+  $output .= "<response>\n";
+  $output .= "<error>$error</error>\n";
+  $message and $output .= "<message>$message</message>\n";
+  $output .= "</response>\n";
+
+  return $output;
+}
+
+function trackback_page() {
+  if (is_numeric(arg(1)) && $node = node_load(array("nid" => arg(1)))) {
+    header("Content-Type: text/xml");
+    print trackback_receive($node);
+  }
+  else {
+    drupal_goto();
+  }
+}
+
+function trackback_nodeapi(&$node, $op, $arg = 0) {
+  switch ($op) {
+    case "form post":
+		//return form_textfield(t("Trackback URL"), "tb_url", $node->tb_url, 40, 255, t("Enter a URL to send the trackback to."));
+    case "insert":
+    case "update":
+      if ($node->tb_url && $node->nid) {
+        trackback_send($node);
+      }
+  }
+}
+
+function trackback_link($type, $node = 0, $main = 0) {
+  if ($type == 'system') {
+    menu('trackback', t('trackback'), trackback_page, 0, MENU_HIDE);
+  }
+  elseif ($type == "node") {
+	  //  $link = l(t("trackback url"), "trackback/$node->nid");
+    if (!$main) {
+      $url = url("node/view/$node->nid");
+      $tb_url = url("trackback/$node->nid");
+      $link .= "\n<!--\n";
+      $link .= "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:trackback=\"http://madskills.com/public/xml/rss/module/trackback/\">\n";
+      $link .= "<rdf:Description rdf:about=\"$url\" dc:identifier=\"$url\" dc:title=\"$node->title\" trackback:ping=\"$tb_url\" />\n";
+      $link .= "</rdf:RDF>\n";
+      $link .= "-->\n";
+    }
+    return array($link);
+  }
+}
+
+/**
+* @param $url http://example.com/path?query
+* @param $headers array("header" => "value");
+* @param $method method to use, defaults to GET
+* @param $data post data / return data
+* @param $retry how many times to retry (follow redirects, etc)
+*/
+function drupal_http($url, $headers = array(), $method = "GET", $data = "", $retry = 3) {
+  static $retries;
+
+  // Parse the URL, and make sure we can handle the schema
+  $uri = parse_url($url);
+  switch ($uri["scheme"]) {
+    case "http":
+      $fp = @fsockopen($uri["host"], ($uri["port"] ? $uri["port"] : 80), $errno, $errstr, 15);
+      break;
+    case "https":
+      // Note: only works for PHP 4.3 compiled with openssl
+      $fp = @fsockopen("ssl://$uri[host]", ($uri["port"] ? $uri["port"] : 443), $errno, $errstr, 20);
+      break;
+    default:
+      $result->error = "invalid schema $uri[scheme]";
+      return $result;
+  }
+
+  // Make sure the socket opened properly
+  if (!$fp) {
+    $result->error = trim("$errno $errstr");
+    return $result;
+  }
+
+  // Construct the path to act on
+  if ($uri["path"]) {
+    $path = $uri["path"];
+  }
+  else {
+    $path = "/";
+  }
+  if ($uri["query"]) {
+    $path .= "?$uri[query]";
+  }
+
+  // Create http request
+  $defaults = array(
+    "host"       => "Host: $uri[host]",
+    "user-agent" => "User-Agent: Drupal/4.0 (+http://www.drupal.org/)",
+    "content-length" => "Content-length: ". strlen($data)
+  );
+
+  foreach ($headers as $header => $value) {
+    $defaults[$header] = "$header: $value";
+  }
+
+  $request = "$method $path HTTP/1.0\r\n";
+  $request .= implode("\r\n", $defaults);
+  $request .= "\r\n\r\n";
+  if ($data) {
+    $request .= "$data\r\n";
+  }
+  $result->request = $request;
+
+  fwrite($fp, $request);
+
+  // Featch response
+  while (!feof($fp)) {
+    $response[] = fgets($fp);
+
+    /*
+    ** Make sure there is still data left to read, necessary to not block
+    ** processing in case the remote site doesn't return EOF properly.
+    */
+    $status = socket_get_status($fp);
+    if ($status["unread_bytes"] = 0) {
+      break;
+    }
+  }
+  fclose($fp);
+
+  // Parse response
+  list($protocl, $code, $text) = explode(" ", trim(array_shift($response)), 3);
+  $result->code = $code;
+  $result->headers = array();;
+  $result->data = "";
+
+  // Parse headers
+  while ($line = trim(array_shift($response))) {
+    if ($line == "") {
+      break;
+    }
+    list($header, $value) = explode(":", $line, 2);
+    $result->headers[$header] = trim($value);
+  }
+
+  while ($line = array_shift($response)) {
+    $result->data .= $line;
+  }
+
+  switch ($result->code) {
+    case 200: // OK
+    case 304: // Not modified
+      break;
+    case 301: // Moved permanently
+    case 302: // Moved temporarily
+      $location = $result->headers["Location"];
+      if ($retries < $retry) {
+        $retries++;
+        $result = drupal_http($result->headers["Location"], $headers, $method, $data, $retry);
+      }
+      else {
+        $result->error = "Too many retries";
+      }
+      $result->url = $location;
+      break;
+    default:
+      $result->error = $text;
+  }
+  return $result;
+}
+?>

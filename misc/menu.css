@@ -1,0 +1,97 @@
+/* CSS Document */
+.horbar	{
+	color: black;
+	background-color: #dcdad5;
+	border: 1px outset #cecac1;
+}
+
+.horbaritem	{
+a	white-space: nowrap;
+	font-family: trebuchet ms, tahoma, verdana, arial, helvetica;
+	font-size: 10px;
+}
+
+.horbaritem a	{
+	display: block;
+	text-decoration: none;
+}
+
+.horbaritem a:link	{
+	color: #000000;
+}
+
+.horbaritem a:visited	{
+	color: #000000;
+}
+
+.horbaritem a:hover	{
+	color: #ffffff;
+	background-color: #930;
+	text-decoration: none;
+}
+
+.horbaritem a:active	{
+	color: #ff0000;
+}
+
+.verbar	{
+	color: black;
+	background-color: #dcdad5;
+	border: 2px outset #cecac1;
+	text-decoration: none;
+}
+
+.submenu	{
+	position: absolute;
+	left: 0;
+	top: 0;
+	visibility: hidden;
+}
+
+.subframe	{
+	position: relative;
+	display: block;
+	background-color: #dcdad5;
+	border: 2px outset #cecac1;
+}
+
+.item	{
+	position: relative;
+	text-align: left;
+	white-space: nowrap;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 9px;
+	font-weight: 500;
+	text-decoration: none;
+}
+
+.item a	{
+	position: relative;
+	display: block;
+	text-decoration: none;
+}
+
+.item a:link	{
+	color: #8D5F59;
+}
+
+.item a:visited	{
+	color: #;
+}
+
+.item a:hover	{
+	color: #663322;
+	background-color: #930;
+	text-decoration: none;
+}
+
+.item a:active	{
+	color: #663322;
+}
+
+.item .fwdarr	{
+	position: absolute;
+	top: 5px;
+/*	right: 4px; */
+	right: 7px;
+}

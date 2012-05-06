@@ -1,0 +1,61 @@
+.term {
+  background-color: transparent;
+  border: 0px solid #ccc;
+  padding: 0em;
+  margin-bottom: 0em;
+}
+.term-container {
+  float: left;
+}
+.term-desc {
+  margin-left: 130px;
+}
+.term-image {
+  float: left;
+  width: 110px;
+}
+.clearit {
+  clear: both;
+}
+.clearspace {
+  height: 16px;
+  clear: both;
+}
+.buttons-row {
+  background-image: url(images/tab.gif);background-repeat:no-repeat;
+}
+.button {
+  color: #fff;
+  font-weight: bold;
+  text-decoration: none;
+  text-align: center;
+  font-family: tahoma, verdana, arial, helvetica, sans-serif;
+  vertical-align: top;
+  padding-top: 1px;
+  font-size: 1.1em;
+  width: 123px;
+  height: 23px;
+  float:left
+}
+.button-off {
+  background-image: url(images/tab.gif);background-repeat:no-repeat;
+}
+.button-on {
+  background-image: url(images/tab_on.gif);background-repeat:no-repeat;
+}
+.button-back {
+  background-image: url(images/tab.gif);background-repeat:x-repeat;
+}
+.button a, .button a:visited, .button a:hover, .button a:link, .button a:active {
+  color: #fff;
+  font-weight: bold;
+  text-decoration: none;
+  text-align: center;
+  font-family: tahoma, verdana, arial, helvetica, sans-serif;
+  vertical-align: top;
+  padding-top: 1px;
+  font-size: 1.1em;
+}
+.imaged {
+  margin-left: 130px; 
+}

@@ -1,0 +1,731 @@
+<?php
+// $Id: wiki.module,v 1.3 2004/08/23 01:24:58 alex Exp $
+/**
+ * wiki.module - mostly taken from <http://phpwiki.sourceforge.net/>, v1.2.2
+ */ 
+
+/**
+ * Implementation of hook_menu().
+ */
+function wiki_menu() {
+  $items = array();
+
+  $items[] = array('path' => 'wiki', 'title' => t("Wiki Text Formatting Rules"),
+    'access' => user_access("access content"),
+    'callback' => 'wiki_page',
+    'type' => MENU_CALLBACK);
+
+  return $items;
+}
+
+function wiki_page()
+{                                 
+  // taken from <http://phpwiki.sourceforge.net/phpwiki/TextFormattingRules>
+  $output = <<<EOS
+<h4>
+ Paragraphs
+</h4>
+<ul>
+<li>
+ Don't indent paragraphs
+</li>
+<li>
+ Words wrap and fill as needed
+</li>
+<li>
+ Use blank lines as separators
+</li>
+<li>
+ Four or more minus signs make a horizontal rule
+</li>
+<li>
+ %%<em></em>% makes a linebreak (in headings and lists too)
+</li>
+</ul>
+<h4>
+ Lists
+</h4>
+<ul>
+<li>
+ asterisk for first level
+<ul>
+<li>
+ asterisk-asterisk for second level, etc.
+</li>
+</ul>
+</li>
+<li>
+ Use * for bullet lists, # for numbered lists (mix at will)
+</li>
+<li>
+ semicolon-term-colon-definition for definition lists:
+</li>
+</ul><dl>
+<dt>term here</dt><dd>
+definition here, as in the &lt;DL&gt;&lt;DT&gt;&lt;DD&gt; list
+</dd>
+</dl><ul>
+<li>
+ One line for each item
+</li>
+<li>
+ Other leading whitespace signals preformatted text, changes font.
+</li>
+</ul>
+<h4>
+ Headings
+</h4>
+<ul>
+<li>
+ '!' at the start of a line makes a small heading
+</li>
+<li>
+ '!!' at the start of a line makes a medium heading
+</li>
+<li>
+ '!!!' at the start of a line makes a large heading
+</li>
+</ul>
+<h4>
+ Fonts
+</h4>
+<ul>
+<li>
+ Indent with one or more spaces to use a monospace font:
+</li>
+</ul>
+<pre>
+ This is in monospace
+</pre><p>
+This is not
+</p>
+<h4>
+Indented Paragraphs
+</h4>
+<ul>
+<li>
+ semicolon-colon -- works like &lt;BLOCKQUOTE&gt;
+</li>
+</ul>
+<dl>
+<dt></dt><dd>
+ this is an indented block of text
+</dd>
+</dl>
+<h4>
+ Emphasis
+</h4>
+<ul>
+<li>
+ Use doubled single-quotes ('<strong></strong>') for emphasis (usually <em>italics</em>)
+</li>
+<li>
+ Use doubled underscores (_<em></em>_) for strong emphasis (usually <strong>bold</strong>)
+</li>
+<li>
+ Mix them at will: <strong><em>bold italics</em></strong>
+</li>
+<li>
+ <em>Emphasis</em> can be used <em>multiple</em> times within a line, but <em>cannot</em> cross line boundaries:
+</li>
+</ul>
+<p>
+''this
+will not work''
+</p>
+<h4>
+ References
+</h4><ul>
+<li>
+ Hyperlinks to other pages within the Wiki are made by placing the page name in square brackets: <a href="this%20is%20a%20page%20link" class="wiki">this is a page link</a>
+</li>
+<li>
+ Hyperlinks to external pages are done like this: <a href="http://www.wcsb.org/" class="rawurl">http://www.wcsb.org/</a>
+</li>
+<li>
+ You can name the links by providing a name, a bar (|) and then the hyperlink or pagename: <a href="http://phpwiki.sourceforge.net/" class="namedurl">PhpWiki home page</a>  - <a href="HomePage" class="named-wiki">the front page</a>
+</li>
+<li>
+ You can suppress linking to old-style references and URIs by preceding the word with a '!', e.g. NotLinkedAsWikiName, http://not.linked.to/
+</li>
+<li>
+ You can create footnotes by using [1], [2], [3], ... like this here <sup class="footnote"><a href="#footnote-1" name="footrev-1-0">[1]</a></sup>. See footnote for counterpart.  (If the [ is in the first column, it is a footnote <em>definition</em> rather than a footnote <em>reference</em> <sup class="footnote"><a href="#footnote-1" name="footrev-1-1">[1]</a></sup>.)
+</li>
+<li>
+ Also, the old way of linking URL's is still supported: precede URLs with "http:", "ftp:" or "mailto:" to create links automatically as in: <a href="http://c2.com/" class="rawurl">http://c2.com/</a>
+</li>
+<li>
+ URLs ending with .png, .gif, or .jpg are inlined if in square brackets, by themselves: <img src="http://phpwiki.sourceforge.net/phpwiki-wiki(1.3)/images/wikibase.png" alt="" />
+</li>
+</ul>
+<h4>
+ HTML Mark-Up Language
+</h4>
+<ul>
+<li>
+ Don't bother
+</li>
+<li>
+ &lt; and &gt; are themselves
+</li>
+<li>
+ The &amp; characters will not work
+</li>
+<li>
+ If you really must use HTML, your system administrator can enable this feature. Start each line with a bar (|). Note that this feature is disabled by default.
+</li>
+</ul>
+<h4>
+ More detail than you want to know
+</h4>
+<p>
+Footnotes:
+</p>
+<p>
+<br /><a name="footnote-1" href="#footrev-1-0" class="footnote-rev">[1]</a><a name="footnote-1" href="#footrev-1-1" class="footnote-rev">+</a> By using [1] a second time (in the first column) the footnote itself is <em>defined</em>.  You may refer to a footnote as many times as you want, but you may only define it once on the page.  Note the the [1] in the footnote links back to the first reference, if there are multiple references there will be +'s after the [1] which will link to the other references.  (References which come <em>after</em> the footnote <em>definition</em> will not be linked to.)
+</p>
+EOS;
+  print theme("page", t($output), t("Wiki Text Formatting Rules"));
+  return;
+}
+ 
+define("ZERO_LEVEL", 0);
+define("NESTED_LEVEL", 1);
+define("FIELD_SEPARATOR", "\263");
+
+// allowed protocols for links - be careful not to allow "javascript:"
+// within a named link [name|uri] one more protocol is defined: phpwiki
+define("ALLOWED_PROTOCOLS", "http|https|mailto|ftp|news|gopher");
+
+// URLs ending with the following extension should be inlined as images
+define("INLINE_IMAGES", "png|jpg|gif");
+
+
+class _wiki_stack {
+  var $items = array();
+  var $size = 0;
+
+  function push($item) 
+        {
+    $this->items[$this->size] = $item;
+    $this->size++;
+    return true;
+  }  
+
+  function pop() 
+        {
+    if ($this->size == 0) {
+      return false; // stack is empty
+    }  
+    $this->size--;
+    return $this->items[$this->size];
+  }  
+
+  function cnt() 
+        {
+    return $this->size;
+  }  
+
+  function top() 
+        {
+    if ($this->size) {
+      return $this->items[$this->size - 1];
+                } else {
+      return '';
+                }
+  }  
+}  
+// end class definition
+
+/**
+ * Find any strings in $str that match $pattern and
+ * store them in $orig, replacing them with tokens
+ * starting at number $ntokens - returns tokenized string
+ */
+function _wiki_tokenize($str, $pattern, &$orig, &$ntokens) 
+{
+  $new = '';      
+  while (preg_match("/^(.*?)($pattern)/", $str, $matches)) {
+    $linktoken = FIELD_SEPARATOR . FIELD_SEPARATOR . ($ntokens++) . FIELD_SEPARATOR;
+    $new .= $matches[1] . $linktoken;
+    $orig[] = $matches[2];
+    $str = substr($str, strlen($matches[0]));
+  }
+  $new .= $str;
+  return $new;
+}
+
+function _wiki_find_node($title)
+{
+  $result = db_query("SELECT n.*, u.name, u.uid FROM node n LEFT JOIN users u ON n.uid = u.uid WHERE n.title = '%s' AND n.status = 1 ORDER BY created DESC", $title);
+  if (db_num_rows($result) == 0) {
+    // No node with exact title found, try substring.
+    $result = db_query("SELECT n.* FROM node n WHERE n.title LIKE '%". check_query($title). "%' AND n.status = 1 ORDER BY created DESC");
+  }
+  else 
+        if (db_num_rows($result) == 1) {
+    return db_fetch_object($result);
+  } else {
+          return FALSE;
+        }
+}
+
+function _wiki_link_unknown($wikiword, $linktext='') 
+{
+  $enc_word = rawurlencode($wikiword);
+  if (empty($linktext)) {
+     $linktext = htmlspecialchars($wikiword);
+        }
+  return "<u>$linktext</u><a href=\"?q=node/add/story?edit[title]=$enc_word\">?</a>";
+}
+
+function _wiki_link_URL($url, $linktext='') 
+{
+  if (ereg("[<>\"]", $url)) {
+    return "<b><u>BAD URL -- remove all of &lt;, &gt;, &quot;</u></b>";
+  }
+  if (empty($linktext)) {
+    $linktext = htmlspecialchars($url);
+        }
+  return "<a href=\"$url\">$linktext</a>";
+}
+
+function _wiki_link_image($url, $alt='[External Image]') 
+{
+  if (ereg('[<>"]', $url)) {
+    return "<b><u>BAD URL -- remove all of &lt;, &gt;, &quot;</u></b>";
+  }
+  return "<img src=\"$url\" ALT=\"$alt\">";
+}
+
+function _wiki_link_node($node, $linktext='') 
+{
+  if (empty($linktext)) {
+    $linktext = htmlspecialchars($node->title);
+        }
+  return "<a href=\"/node/view/{$node->nid}\">$linktext</a>";
+}
+
+/**
+ * $bracketlink will start and end with brackets; in between
+ * will be either a page name, a URL or both separated by a pipe.
+ */
+function _wiki_parse_and_link($bracketlink) 
+{
+  // strip brackets and leading space
+  preg_match("/(\[\s*)(.+?)(\s*\])/", $bracketlink, $match);
+  // match the contents 
+  preg_match("/([^|]+)(\|)?([^|]+)?/", $match[2], $matches);
+
+  if (isset($matches[3])) {
+    // named link of the form  "[some link name | http://blippy.com/]"
+    $URL = trim($matches[3]);
+    $linkname = htmlspecialchars(trim($matches[1]));
+    $linktype = 'named';
+  } else {
+    // unnamed link of the form "[http://blippy.com/] or [wiki page]"
+    $URL = trim($matches[1]);
+    $linkname = '';
+    $linktype = 'simple';
+  }
+        
+  if ($node = _wiki_find_node($URL)) {
+     $link['type'] = "wiki-$linktype";
+     $link['link'] = _wiki_link_node($node, $linkname);
+  } else
+        if (preg_match("#^".ALLOWED_PROTOCOLS.":#", $URL)) {
+    // if it's an image, embed it; otherwise, it's a regular link
+    $link['type'] = "url-$linktype";
+    $link['link'] = _wiki_link_URL($URL, $linkname);
+  } else
+  if (preg_match("/".INLINE_IMAGES."$/i", $URL)) {
+    $link['type'] = "image-$linktype";
+    $link['link'] = _wiki_link_image($URL, $linkname);
+  } else
+        if (preg_match("#^phpwiki:(.*)#", $URL, $match)) {
+    $link['type'] = "url-wiki-$linktype";
+    if (empty($linkname)) {
+      $linkname = htmlspecialchars($URL);
+                }
+    $link['link'] = "<a href=\"/SCRIPT/$match[1]\">$linkname</a>";
+  } else
+        if (preg_match("#^\d+$#", $URL)) {
+    $link['type'] = "reference-$linktype";
+    $link['link'] = $URL;
+  } else {
+    $link['type'] = "wiki-unknown-$linktype";
+    $link['link'] = _wiki_link_unknown($URL, $linkname);
+  }
+        return $link;
+}
+
+
+/** 
+ * Wiki HTML output can, at any given time, be in only one mode.
+ * It will be something like Unordered List, Preformatted Text,
+ * plain text etc. When we change modes we have to issue close tags
+ * for one mode and start tags for another.
+ *
+ * @param $tag     HTML tag to insert
+ * @param $tagtype ZERO_LEVEL - close all open tags before inserting $tag
+ *                 NESTED_LEVEL - close tags until depths match
+ * @param $level   nesting level (depth) of $tag
+ *                 nesting is arbitrary limited to 10 levels
+ */
+function _wiki_set_output_mode($tag, $tagtype, $level)
+{
+  static $stack;
+        
+        if (!$stack) {
+          $stack = new _wiki_stack;
+        }
+  $retvar = '';
+
+  if ($level > 10) {
+          /*
+                 * arbitrarily limit tag nesting
+     * We just clamp the the maximum depth.
+                 */
+          $level = 10;
+  }
+      
+  if ($tagtype == ZERO_LEVEL) {
+    // empty the stack until $level == 0;
+    if ($tag == $stack->top()) {
+      return; // same tag? -> nothing to do
+    }
+    while ($stack->cnt() > 0) {
+      $closetag = $stack->pop();
+      $retvar .= "</$closetag>\n";
+    }
+   
+    if ($tag) {
+      $retvar .= "<$tag>\n";
+      $stack->push($tag);
+    }
+
+  } else
+        if ($tagtype == NESTED_LEVEL) {
+    if ($level < $stack->cnt()) {
+      // $tag has fewer nestings (old: tabs) than stack,
+            // reduce stack to that tab count
+      while ($stack->cnt() > $level) {
+        $closetag = $stack->pop();
+        if ($closetag == FALSE) {
+          //echo "bounds error in tag stack";
+          break;
+        }
+        $retvar .= "</$closetag>\n";
+      }
+
+            // if list type isn't the same,
+            // back up one more and push new tag
+            if ($tag != $stack->top()) {
+              $closetag = $stack->pop();
+              $retvar .= "</$closetag><$tag>\n";
+              $stack->push($tag);
+            }
+   
+    } else
+                if ($level > $stack->cnt()) {
+            // Test for and close top level elements which are not allowed to contain
+            // other block-level elements.
+            if ($stack->cnt() == 1 and
+                preg_match('/^(p|pre|h\d)$/i', $stack->top())) {
+              $closetag = $stack->pop();
+              $retvar .= "</$closetag>";
+            }
+
+            // we add the diff to the stack
+            // stack might be zero
+            if ($stack->cnt() < $level) {
+              while ($stack->cnt() < $level - 1) {
+                      /*
+                                         * This is a bit of a hack:
+                       *
+                 * We're not nested deep enough, and have to make up
+                 * some kind of block element to nest within.
+                 *
+                 * Currently, this can only happen for nested list
+                 * element (either <ul> <ol> or <dl>).  What we used
+                 * to do here is to open extra lists of whatever
+                 * type was requested.  This would result in invalid
+                 * HTML, since and list is not allowed to contain
+                 * another list without first containing a list
+                 * item.  ("<ul><ul><li>Item</ul></ul>" is invalid.)
+                 *
+                 * So now, when we need extra list elements, we use
+                 * a <dl>, and open it with an empty <dd>.
+                                         */
+
+                      $retvar .= "<dl><dd>";
+                      $stack->push('dl');
+              }
+
+              $retvar .= "<$tag>\n";
+              $stack->push($tag);
+      }
+    } else { // $level == $stack->cnt()
+      if ($tag == $stack->top()) {
+        return; // same tag? -> nothing to do
+      } else {
+              // different tag - close old one, add new one
+        $closetag = $stack->pop();
+        $retvar .= "</$closetag>\n";
+        $retvar .= "<$tag>\n";
+        $stack->push($tag);
+      }
+    }
+  } else { // unknown $tagtype
+    ExitWiki ("Passed bad tag type value in _wiki_set_output_mode");
+  }
+  return $retvar;
+} // end _wiki_set_output_mode()
+
+
+function _wiki_transform($text)
+{
+  $html = '';
+
+  // process text line by line
+        $lines = preg_split('/\n/', $text);
+  $numlines = count($lines);
+
+  for ($index = 0; $index < $numlines; $index++) {
+    unset($tokens);
+    unset($replacements);
+    $ntokens = 0;
+    $replacements = array();
+      
+    $tmpline = $lines[$index];
+
+    if (!strlen($tmpline) || $tmpline == "\r") {
+      // this is a blank line, send <p>
+      $html .= _wiki_set_output_mode('', ZERO_LEVEL, 0);
+      continue;
+    } else
+
+/* phpwiki-way of protecting HTML
+          if (preg_match("/(^\|)(.*)/", $tmpline, $matches)) {
+      // HTML mode
+      $html .= _wiki_set_output_mode("", ZERO_LEVEL, 0);
+      $html .= $matches[2];
+      continue;
+    }
+*/
+    $tmpline = _wiki_tokenize($tmpline, '<[^>]+>', $replacements, $ntokens);
+                
+        /*
+     * New linking scheme: links are in brackets. This will
+     * emulate typical HTML linking as well as Wiki linking.
+         */
+
+    // First need to protect [[.
+    $oldn = $ntokens;
+    $tmpline = _wiki_tokenize($tmpline, '\[\[', $replacements, $ntokens);
+    while ($oldn < $ntokens) {
+      $replacements[$oldn++] = '[';
+                }
+  
+    // Now process the [\d+] links which are numeric references 
+    $oldn = $ntokens;
+    $tmpline = _wiki_tokenize($tmpline, '\[\s*\d+\s*\]', $replacements, $ntokens);
+    while ($oldn < $ntokens) {
+            $num = (int) substr($replacements[$oldn], 1);
+      if (! empty($embedded[$num])) {
+        $replacements[$oldn] = $embedded[$num];
+                        }
+            $oldn++;
+    }
+
+    // match anything else between brackets 
+    $oldn = $ntokens;
+    $tmpline = _wiki_tokenize($tmpline, '\[.+?\]', $replacements, $ntokens);
+    while ($oldn < $ntokens) {
+            $link = _wiki_parse_and_link($replacements[$oldn]); 
+            $replacements[$oldn] = $link['link'];
+            $oldn++;
+    }
+
+                /*
+     * replace all URL's with tokens, so we don't confuse them
+     * with Wiki words later. Wiki words in URL's break things.
+     * URLs preceeded by a '!' are not linked
+                 */
+
+    $tmpline = _wiki_tokenize($tmpline, "!?\b(".ALLOWED_PROTOCOLS."):[^\s<>\[\]\"'()]*[^\s<>\[\]\"'(),.?]", $replacements, $ntokens);
+    while ($oldn < $ntokens) {
+      if($replacements[$oldn][0] == '!') {
+              $replacements[$oldn] = substr($replacements[$oldn], 1);
+            } else {
+              $replacements[$oldn] = _wiki_link_URL($replacements[$oldn]);
+                        }
+      $oldn++;
+    }
+
+    //escape HTML metachars
+    // $tmpline = str_replace('&', '&amp;', $tmpline);
+    $tmpline = str_replace('>', '&gt;', $tmpline);
+    $tmpline = str_replace('<', '&lt;', $tmpline);
+
+    // %%% are linebreaks
+    $tmpline = str_replace('%%%', '<br>', $tmpline);
+
+    // bold italics (old way)
+    $tmpline = preg_replace("|(''''')(.*?)(''''')|",
+                            "<strong><em>\\2</em></strong>", $tmpline);
+
+    // bold (old way)
+    $tmpline = preg_replace("|(''')(.*?)(''')|",
+                            "<strong>\\2</strong>", $tmpline);
+
+    // bold
+    $tmpline = preg_replace("|(__)(.*?)(__)|",
+                            "<strong>\\2</strong>", $tmpline);
+
+    // italics
+    $tmpline = preg_replace("|('')(.*?)('')|",
+                            "<em>\\2</em>", $tmpline);
+
+
+    /*
+                 * unordered, ordered, and dictionary list  (using TAB)
+                 */
+
+    if (preg_match("/(^\t+)(.*?)(:\t)(.*$)/", $tmpline, $matches)) {
+      // this is a dictionary list (<dl>) item
+      $numtabs = strlen($matches[1]);
+      $html .= _wiki_set_output_mode('dl', NESTED_LEVEL, $numtabs);
+            $tmpline = '';
+            if (trim($matches[2])) {
+        $tmpline = '<dt>' . $matches[2];
+                        }
+            $tmpline .= '<dd>' . $matches[4];
+
+    } else
+                if (preg_match("/(^\t+)(\*|\d+|#)/", $tmpline, $matches)) {
+      // this is part of a list (<ul>, <ol>)
+      $numtabs = strlen($matches[1]);
+      if ($matches[2] == '*') {
+        $listtag = 'ul';
+      } else {
+        $listtag = 'ol'; // a rather tacit assumption. oh well.
+      }
+      $tmpline = preg_replace("/^(\t+)(\*|\d+|#)/", "", $tmpline);
+      $html .= _wiki_set_output_mode($listtag, NESTED_LEVEL, $numtabs);
+      $html .= '<li>';
+
+      /*
+       * tabless markup for unordered, ordered, and dictionary lists
+       * ul/ol list types can be mixed, so we only look at the last
+       * character. Changes e.g. from "**#*" to "###*" go unnoticed.
+       * and wouldn't make a difference to the HTML layout anyway.
+                         */
+
+      // unordered lists <UL>: "*"
+    } else
+                if (preg_match("/^([#*]*\*)[^#]/", $tmpline, $matches)) {
+      // this is part of an unordered list
+      $numtabs = strlen($matches[1]);
+      $tmpline = preg_replace("/^([#*]*\*)/", '', $tmpline);
+      $html .= _wiki_set_output_mode('ul', NESTED_LEVEL, $numtabs);
+      $html .= '<li>';
+
+      // ordered lists <OL>: "#"
+    } else
+                if (preg_match("/^([#*]*\#)/", $tmpline, $matches)) {
+      // this is part of an ordered list
+      $numtabs = strlen($matches[1]);
+      $tmpline = preg_replace("/^([#*]*\#)/", "", $tmpline);
+      $html .= _wiki_set_output_mode('ol', NESTED_LEVEL, $numtabs);
+      $html .= '<li>';
+
+      // definition lists <DL>: ";text:text"
+    } else
+                if (preg_match("/(^;+)(.*?):(.*$)/", $tmpline, $matches)) {
+      // this is a dictionary list item
+      $numtabs = strlen($matches[1]);
+      $html .= _wiki_set_output_mode('dl', NESTED_LEVEL, $numtabs);
+            $tmpline = '';
+
+      if (trim($matches[2])) {
+        $tmpline = '<dt>' . $matches[2];
+                        }
+            $tmpline .= '<dd>' . $matches[3];
+
+      // remaining modes: preformatted text, headings, normal text      
+
+    } else
+                if (preg_match("/^\s+/", $tmpline)) {
+      // this is preformatted text, i.e. <pre>
+      $html .= _wiki_set_output_mode('pre', ZERO_LEVEL, 0);
+
+    } else
+                if (preg_match("/^(!{1,3})[^!]/", $tmpline, $whichheading)) {
+            // lines starting with !,!!,!!! are headings
+            if ($whichheading[1] == '!') {
+                    $heading = 'h3';
+                        } else
+                        if ($whichheading[1] == '!!') {
+                          $heading = 'h2';
+                        } else
+                        if ($whichheading[1] == '!!!') {
+                          $heading = 'h1';
+                        }
+            $tmpline = preg_replace("/^!+/", '', $tmpline);
+            $html .= _wiki_set_output_mode($heading, ZERO_LEVEL, 0);
+
+    } else
+                if (preg_match('/^-{4,}\s*(.*?)\s*$/', $tmpline, $matches)) {
+            // four or more dashes to <hr>
+            // <hr> can not be contained in a
+            $html .= _wiki_set_output_mode('', ZERO_LEVEL, 0) . "<hr>\n";
+          if ( ($tmpline = $matches[1]) != '' ) {
+              $html .= _wiki_set_output_mode('p', ZERO_LEVEL, 0);
+            }
+    } else {
+      // it's ordinary output if nothing else
+      $html .= _wiki_set_output_mode('p', ZERO_LEVEL, 0);
+    }
+
+    /*
+     * Replace tokens
+           */
+    for ($i = 0; $i < $ntokens; $i++) {
+      $tmpline = str_replace(FIELD_SEPARATOR.FIELD_SEPARATOR.$i.FIELD_SEPARATOR, $replacements[$i], $tmpline);
+    }                           
+    $html .= $tmpline . "\n";
+  }
+  $html .= _wiki_set_output_mode('', ZERO_LEVEL, 0);
+        
+  return $html;
+}
+
+function wiki_help($type= "admin/help#wiki") {
+  switch ($type) {
+    case "admin/modules#description":
+      return t("Enables users to use simple markup to format stories, articles or similar content.");
+    case "filter#short-tip":
+    case "filter#long-tip":
+      return t("You may use <a href=\"%wiki-explanation\">Wiki Formatting</a>", array("%wiki-explanation" => url("wiki")));
+  }
+}
+
+function wiki_filter($op, $text = "") {
+  switch ($op) {
+    case "name":
+      return t("Wiki filter");
+    case "process":
+      return _wiki_transform($text);
+    case "settings":
+      return _wiki_filter_settings();
+    default:
+      return $text;
+  }
+}
+
+function _wiki_filter_settings() {
+  return form_group(t("Wiki filter"), t("The wiki filter is enabled. For more information on wiki syntax, look at the <a href=\"%wiki_syntax\">Wiki Syntax Reference</a>.", array("%wiki_syntax" => url("wiki"))));
+}
+
+?>

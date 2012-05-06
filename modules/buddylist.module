@@ -1,0 +1,257 @@
+<?php
+  // $Id: buddylist.module,v 1.11 2004/04/07 12:21:37 ber Exp $
+
+  function buddylist_system($field) {
+    $system["description"] = t("Enable Buddy List functionality");
+    return $system[$field];
+  }
+
+  function buddylist_user($type, &$edit, &$thisuser) {
+    global $user;
+
+    if ($user->uid == 0) {
+      return null;
+    }
+    if (!session_is_registered('buddylist')) {
+      buddylist_update_session();
+    }
+
+    if (isset($thisuser->uid) and $type == "view_public") {
+      if (in_array($thisuser->uid, $_SESSION['buddylist'])) {
+        $output .= form_item(t("Buddy List"), l(t("Remove from Buddy List"), "buddylist/delete/" . $thisuser->uid));
+      }
+      else {
+        $output .= form_item(t("Buddy List"), l(t("Add to Buddy List"), "buddylist/add/" . $thisuser->uid));
+      }
+    }
+    return $output;
+  }
+
+  function buddylist_update_session() {
+    global $user;
+    if (!isset($_SESSION['buddylist'])) {
+      session_register('buddylist');
+    }
+    $_SESSION['buddylist'] = array();
+    if (isset($user->uid)) {
+      $result = db_query("SELECT buddy FROM {buddylist} WHERE uid=%d ORDER BY timestamp DESC",$user->uid);
+      while ($buddy = db_fetch_object($result)) {
+        $_SESSION['buddylist'][] = $buddy->buddy;
+      }
+    }  
+  }
+
+  function buddylist_block($op = "list", $delta = 0) {
+    global $user;
+    if ($op == "list") {
+    
+      $block[0]["info"] = t("Buddy List");
+      $block[1]["info"] = t("Buddy Blogs");
+      return $block;
+      
+    } 
+    elseif ($op == 'view' and user_access("access content")) {
+    
+      if ($user->uid > 0) {
+        switch ($delta) {
+          case 0 :
+            $result = db_query("SELECT b.buddy as uid, u.name FROM {buddylist} b, {users} u WHERE b.uid=%d AND u.uid=b.buddy ORDER BY b.timestamp DESC",$user->uid);
+            while ($account = db_fetch_object($result)) {
+              $account->link = l((strlen($account->name) > 15 ? substr($account->name, 0, 15) . '...' : $account->name), "user/view/$account->uid");
+              $users[] = $account->link;
+            }
+
+            $block["content"] = theme("user_list",$users);
+            $block["subject"] = t("Buddy List");
+            return $block;
+            break;
+
+          case 1:
+            $block["content"] = node_title_list(db_query("SELECT distinct n.nid, u.uid, u.name, n.created, n.title FROM {buddylist} b, {node} n LEFT JOIN {users} u ON n.uid = u.uid WHERE n.type = 'blog' AND n.status = 1 AND n.uid=b.buddy AND b.uid=%d ORDER BY n.nid DESC LIMIT 5",$user->uid));
+            if (!sizeof($block["content"])) {
+              return NULL;
+            } 
+            $block["subject"] = t("My Friends' Blogs");
+            return $block;
+            break;
+        } 
+      } 
+    }
+  }
+
+  
+  function buddylist_icon_link($id) {
+    global $user;
+
+    if (!isset($user->uid)) {
+      return null;
+    }
+
+    if (!isset($_SESSION['buddylist'])) {
+      buddylist_update_session();
+    }
+
+    if (in_array($id,$_SESSION['buddylist'])) {
+      return buddylist_del_link($id);
+    } 
+    else {
+      return buddylist_add_link($id);
+    }
+  }
+
+  function buddylist_add_link($id) {
+    global $theme;
+    $icon = isset($theme->add_icon) ? $theme->add_icon : "[+]";
+    return l($icon,"buddylist/add/$id");
+  }
+  
+  function buddylist_del_link($id) {
+    global $theme;
+    $icon = isset($theme->del_icon) ? $theme->del_icon : "[-]";
+    return l($icon,"buddylist/delete/$id");
+  }
+
+
+  function buddylist_link($type) {
+    if ($type == 'system') {
+      menu ("buddylist","buddylist","buddylist_page",0,MENU_HIDE);
+    }
+  }
+  function buddylist_page() {
+    global $user;
+    $edit = $_POST["edit"];
+    $op = $_POST["op"];
+    if (empty($op)) {
+      $op = arg(1);
+    }
+    switch ($op) {
+      case 'add' : 
+        $title = "Confirm Addition to Buddy List?";
+        $output = buddylist_addbuddy_form(arg(2));
+        break;
+      case "Add User" :
+      case "save" :
+        $output = buddylist_add($edit['buddy_id']);
+        break;
+
+      case 'delete' : 
+        $title = "Confirm Removal from Buddy List?";
+        $output = buddylist_deletebuddy_form(arg(2));
+        break;
+      
+      case "Remove User" :
+      case "remove" :
+        $output = buddylist_remove($edit['buddy_id']);
+        break;
+
+      case "view" :
+      default :
+        $title = "My Buddies";
+        $output = buddylist_list();
+        break;
+    }
+    print theme("page",  $output,t($title));
+
+  }
+
+  function buddylist_list() {
+    global $user;
+
+    $header = array(
+              array("data" => t("username"), "field" => "u.name", "sort" => "asc"),
+              array("data" => t("last seen"), "field" => "u.timestamp"),  );
+    if (module_exist("privatemsg") && variable_get("members_private", false)) {
+      $header[] = t("private message");
+    }
+    if (module_exist("blog") && user_access("access content")) {
+      $header[] = t("blog");
+    }
+    if (module_exist("image") && user_access("access content")) {
+      $header[] = t("gallery");
+    }
+
+    $result = pager_query("SELECT b.buddy as uid, u.name, u.mail, u.timestamp, u.data FROM {buddylist} b, {users} u WHERE b.uid=" . $user->uid . " AND u.uid=b.buddy AND status = 1" . tablesort_sql($header), 20);
+    while ($user = db_fetch_object($result)) {
+      if ($user->data && $user->data = unserialize($user->data)) {
+        foreach ($user->data as $key => $value) {
+          if (!isset($user->$key)) {
+            $user->$key = $value;
+          }
+        }
+      }
+
+      $row = array( format_name($user), member_interval(time() - $user->timestamp, 2));
+      if (module_exist("privatemsg") && variable_get("members_private", false)) {
+        $row[] = l(t('send message'), "privatemsg/msgto/$user->uid");
+      }
+      if (module_exist("blog") && user_access("access content")) {
+        $row[] = l(t("blog"), "blog/$user->uid");
+      }
+      if (module_exist("image")) {
+        $row[] = l(t("gallery"), "images/uid/$user->uid");
+      }
+      $rows[] = $row;
+    }
+
+    if ($pager = theme("pager", NULL, 20, 0, tablesort_pager())) {
+      $rows[] = array(array("data" => $pager, "colspan" => count($header)));
+    }
+    $output = '<div class="members">'. theme("table", $header, $rows) .'</div>';
+
+    return $output;
+  }
+
+  function buddylist_addbuddy_form($uid) {
+    global $user;
+    buddylist_update_session();
+    $buddy = user_load(array('uid' => $uid));
+    
+    if (empty($buddy->name)) {
+      return t("This user does not exist");
+    }
+    elseif (in_array($uid, $_SESSION['buddylist'])) {
+      return t("This user is already on your buddy list");
+    }
+    elseif ($user->uid == $uid) {
+      return t("Cannot add yourself to buddy list");
+    }
+    else {
+      $form  = "Add User <b>'" . l($buddy->name,"user/" . $uid) . "'</b> to Buddy List?<br /><br />";
+      $form .= form_hidden("buddy_id", $uid);
+      $form .= form_submit(t("Add User"));  
+      return form($form,"post",url("buddylist/save"));
+    }
+  }
+  
+  function buddylist_deletebuddy_form($uid) {
+    global $user;
+    buddylist_update_session();
+    $buddy = user_load(array('uid' => $uid));
+    
+    if (empty($buddy->name)) {
+      return "This user does not exist";
+    }
+    elseif (!in_array($uid, $_SESSION['buddylist'])) {
+      return "This user is not on your buddy list";
+    }
+    else {
+      $form  = "Remove User <b>'" . l($buddy->name,"user/" . $uid) . "'</b> from Buddy List?<br /><br />";
+      $form .= form_hidden("buddy_id", $uid);
+      $form .= form_submit(t("Remove User"));  
+      return form($form,"post",url("buddylist/remove"));
+    }
+  }
+
+  function buddylist_add($id) {
+    global $user;
+    db_query("INSERT INTO {buddylist} (uid,buddy,timestamp) VALUES (%d,%d,%d)" , $user->uid , $id , time());
+    buddylist_update_session();
+  }
+  
+  function buddylist_remove($id) {
+    global $user;
+    db_query("DELETE FROM {buddylist} where uid=%d and buddy=%d" , $user->uid , $id);
+    buddylist_update_session();
+  }
+
+?>

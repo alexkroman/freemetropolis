@@ -1,0 +1,154 @@
+<?php
+// $Id: commentrss.module,v 1.2 2004/07/05 18:58:43 goba Exp $
+
+function commentrss_help($section) {
+  $help = t('Provides RSS feeds for comments');
+  if ($section == "admin/system/modules#description") {
+    return $help;
+  }
+  elseif ($section == "admin/help#commentrss") {
+    return "<p>$help</p>";
+  }
+}
+
+function commentrss_link($type) {
+  if ($type == "system" && user_access("access content")) {
+    menu("crss",       "", "commentrss_feed_site",  0, MENU_HIDE);
+    menu("crss/node",  "", "commentrss_feed_node",  0, MENU_HIDE);
+    menu("crss/term",  "", "commentrss_feed_term",  0, MENU_HIDE);
+    menu("crss/vocab", "", "commentrss_feed_vocab", 0, MENU_HIDE);
+  }
+}
+
+// Provides a comment feed for the complete Drupal site (ie. all nodes)
+function commentrss_feed_site() {
+  $items = commentrss_format_items();
+  commentrss_format_feed($items);
+}
+
+// Provides a comment feed for nodes in a vocabulary
+// For the master link in the RSS feed to work, you need vocabulary_list.module!
+function commentrss_feed_vocab() {
+  global $base_url;
+  
+  $vid = arg(2);
+  if (is_numeric($vid)) {
+    
+    // Get nids for this term
+    $nids = array();
+    $result = db_query("SELECT DISTINCT(n.nid) FROM {node} n INNER JOIN {term_node} r ON n.nid = r.nid INNER JOIN {term_data} d ON r.tid = d.tid WHERE d.vid = %d AND n.status = '1'", $vid);
+    while ($node = db_fetch_object($result)) {
+      $nids[] = $node->nid;
+    }
+    
+    // No relevant nids found for this vocabulary
+    if (!count($nids)) { return; }
+    
+    $items = commentrss_format_items('nid IN (' . join(', ', $nids) . ')');
+    $vocab = taxonomy_get_vocabulary($vid);
+    
+    // We can link to a specific page if vocabulary listing is present
+    $link = (module_exist('vocabulary_list') ? url("taxonomy/page/vocab/$vid", NULL, NULL, TRUE) : $base_url);
+    
+    $channel = array(
+      'title'       => variable_get('site_name', 'drupal') .' - '. $vocab->name .' - '. t('Comments'),
+      'link'        => $link,
+      'description' => t('Comments for "%title"', array("%title" => $vocab->name)),
+    );
+    
+    commentrss_format_feed($items, $channel);
+  }
+}
+
+// Provides a comment feed for nodes associated with a term
+function commentrss_feed_term() {
+  $tid = arg(2);
+  if (is_numeric($tid)) {
+    
+    // Get nids for this term
+    $nids = array();
+    $result = db_query("SELECT DISTINCT(n.nid) FROM {node} n INNER JOIN {term_node} r ON n.nid = r.nid WHERE r.tid = %d AND n.status = '1'", $tid);
+    while ($node = db_fetch_object($result)) {
+      $nids[] = $node->nid;
+    }
+    
+    // No relevant nids found for this term
+    if (!count($nids)) { return; }
+    
+    $items = commentrss_format_items('nid IN (' . join(', ', $nids) . ')');
+    $term = taxonomy_get_term($tid);
+    
+    $channel = array(
+      'title'       => variable_get('site_name', 'drupal') .' - '. $term->name .' - '. t('Comments'),
+      'link'        => url("taxonomy/view/or/$tid", NULL, NULL, TRUE),
+      'description' => t('Comments for "%title"', array("%title" => $term->name)),
+    );
+    
+    commentrss_format_feed($items, $channel);
+  }
+}
+
+// Provides a comment feed for a single node (also includes the node teaser
+// as the last item, even if there are too many comments which are not
+// included in the resulting RSS output)
+function commentrss_feed_node() {
+  
+  $nid = arg(2);
+  if (is_numeric($nid)) {
+    $node = node_load(array('nid' => $nid));
+    
+    // No node found for this ID
+    if (!$node) { return; }
+
+    $items = commentrss_format_items("nid = $nid");
+    $link = url("node/view/$nid", NULL, NULL, TRUE);
+    $items .= format_rss_item($node->title, $link, ($node->teaser ? $node->teaser : $node->body), array('pubDate' => date('r', $node->changed)));
+    
+    $channel = array(
+      'title'       => variable_get('site_name', 'drupal') .' - '. $node->title .' - '. t('Comments'),
+      'link'        => $link,
+      'description' => t('Comments for "%title"', array("%title" => $node->title)),
+    );
+    
+    commentrss_format_feed($items, $channel);
+  }
+}
+
+// Format a comment feed with the given items and print the output
+// This is a customized version of the core node_feed()
+function commentrss_format_feed($items, $channel = array()) {
+  global $base_url, $languages;
+  
+  $channel_defaults = array(
+    'version'     => '0.92',
+    'title'       => variable_get('site_name', 'drupal') . ' - ' . t('Comments'),
+    'link'        => $base_url,
+    'description' => t('Comments'),
+    'language'    => (($key = reset(array_keys($languages))) ? $key : 'en')
+  );
+  $channel = array_merge($channel_defaults, $channel);
+  
+  $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+  $output .= "<!DOCTYPE rss [<!ENTITY % HTMLlat1 PUBLIC \"-//W3C//ENTITIES Latin 1 for XHTML//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml-lat1.ent\">]>\n";
+  $output .= "<rss version=\"". $channel["version"] . "\" xml:base=\"". $base_url ."\">\n";
+  $output .= format_rss_channel($channel['title'], $channel['link'], $channel['description'], $items, $channel['language']);
+  $output .= "</rss>\n";
+
+  drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  print $output;
+}
+
+// Format RSS for comments sent in reply to the nodes selected by the given SQL selector
+function commentrss_format_items($nodeselector = NULL) {
+  
+  $items = '';
+  $nodeselector = ((isset($nodeselector) && strlen($nodeselector)) ? "AND $nodeselector" : '');
+      
+  $comments = db_query_range("SELECT * FROM {node} n INNER JOIN {shadowlog} s ON s.nid = n.nid WHERE n.type = 'blog' AND n.status = 1 and s.shadow_nid = " . arg(1) . " ORDER BY n.created DESC", 0, 15);
+    
+  while ($comment = db_fetch_object($comments)) {
+    $link = url("node/view/{$comment->nid}", NULL, "comment-{$comment->cid}", TRUE);
+    $items .= format_rss_item($comment->title, $link, $comment->body, array('pubDate' => date('r', $comment->created)));
+  }
+  return $items;
+}

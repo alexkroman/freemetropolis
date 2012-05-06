@@ -1,0 +1,88 @@
+<?php
+// $Id: taxonomy_menu.module,v 1.1.1.1 2004/07/24 19:09:46 alex Exp $
+
+function taxonomy_menu_help($section) {
+  $output = "";
+
+  switch ($section) {
+    case "admin/system/modules#description":
+      $output = t("Adds links to taxonomy terms to the global navigation menu.");
+      break;
+  }
+  
+  return $output;
+} // taxonomy_menu_help
+
+
+function taxonomy_menu_link($type, $node = NULL) {
+  if ($type == "system") {
+    if (user_access("access content")) {
+      foreach (taxonomy_get_vocabularies() as $vocabulary) {
+        if (variable_get("taxonomy_menu_show_" . $vocabulary->vid, 1)) {
+          $path = "taxonomy_menu/" . $vocabulary->vid;
+          if (variable_get("taxonomy_menu_display_vocname", 1)) {
+            menu($path, t($vocabulary->name), "taxonomy_menu_page");
+          }
+    
+          $tree = taxonomy_get_tree($vocabulary->vid);
+          $old_depth = -1;
+          $old_path = $path;
+          
+          foreach ($tree as $term) {
+            if ($term->depth <= $old_depth) {
+              $slashes_to_remove = $old_depth - $term->depth + 1;
+              for ($i = 0; $i < $slashes_to_remove; $i++) {
+                $old_path = substr($old_path, 0, strrpos($old_path, "/"));
+              }
+            }
+            $path = $old_path . "/" . $term->tid;
+            $old_depth = $term->depth;
+            $old_path = $path;
+            $count = taxonomy_term_count_nodes($term->tid);
+            menu($path, t($term->name) . ' (' . $count . ') ', "taxonomy_menu_page", $term->weight);
+          }
+        }
+      }
+    }
+  }
+} // taxonomy_menu_link
+
+
+function taxonomy_menu_settings() {
+  $form .= form_checkbox(t("Display descendants"), "taxonomy_menu_display_descendants", 1, variable_get("taxonomy_menu_display_descendants", 1), t("If checked, then when a term is selected all nodes belonging to subterms are also displayed."));
+  $form .= form_checkbox(t("Show vocabulary name"), "taxonomy_menu_display_vocname", 1, variable_get("taxonomy_menu_display_vocname", 1), t("If checked, terms are grouped in the menu under their respective vocabularies. You may want to disable this if you have only one navigation vocabulary."));
+
+  foreach (taxonomy_get_vocabularies() as $vocabulary) {
+    $form .= form_checkbox(t("Show '%vocab' in menu", array("%vocab" => t($vocabulary->name))), "taxonomy_menu_show_" . $vocabulary->vid, 1, variable_get("taxonomy_menu_show_" . $vocabulary->vid, 1));
+  }
+  
+  return $form;
+} // taxonomy_menu_settings
+
+
+function taxonomy_menu_page() {
+  if (arg(2)) {
+    $arguments = explode("/", $_GET["q"]);
+    $main_tid = check_query(array_pop($arguments));
+  }
+  else {
+    $main_tid = 0;
+  }
+  if (variable_get("taxonomy_menu_display_descendants", 1)) {
+    $tree = taxonomy_get_tree(arg(1), $main_tid);
+    $tids = array_map("_taxonomy_menu_get_tid_from_term", $tree);
+  }
+  $tids[] = $main_tid;
+  $taxonomy->operator = "or";
+  $taxonomy->tids = $tids;
+  $taxonomy->str_tids = implode(",", $tids);
+
+  print theme("page", taxonomy_render_nodes(taxonomy_select_nodes($taxonomy)));
+} // taxonomy_menu_page
+
+
+function _taxonomy_menu_get_tid_from_term($term) {
+  return $term->tid;
+} // _taxonomy_menu_get_tid_from_term
+
+?>

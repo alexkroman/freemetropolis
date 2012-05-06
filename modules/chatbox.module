@@ -1,0 +1,397 @@
+<?php
+// $Id: chatbox.module,v 1.34.4.3 2004/09/16 23:03:52 ax Exp $
+
+function chatbox_help($section = "admin/help#chatbox") {
+  $output = "";
+
+  switch ($section) {
+    case "admin/system/modules#description":
+      $output = t("An HTML/JavaScript based chat.");
+      break;
+  }
+
+  return $output;
+}
+
+function chatbox_link($type) {
+  if ($type == "system") {
+    menu("chatbox", t("Chatbox"), "chatbox_page", 0, 1);
+  }
+  if ($type == "page" && user_access("view chatbox")) {
+    $links[] = l(t("chatbox"), "chatbox");
+  }
+  return $links ? $links : array();
+}
+
+function chatbox_block($op = "list", $delta = 0) {
+  if ($op == "list") {
+    $blocks[0]["info"] = t("Chatbox Discussion");
+    return $blocks;
+  }
+  else {
+    switch ($delta) {
+      case 0:
+        $block["subject"] = t("Chatbox");
+        $block["content"] = "<br /><br />" . chatbox_block_display();
+        return $block;
+    }
+  }
+}       
+
+function chatbox_block_display() {
+  if (user_access("view chatbox")) {
+    $content = _chatbox_view(10, 0, 1);
+    if (user_access("join chatbox"))
+      $link = l(t("say something"), "chatbox", array(), "autolaunch=1");
+      $content .= '
+      <br />
+      <div align="center">
+        [ '. $link .' ]
+      </div>';
+    }
+
+  return $content;
+}
+
+function chatbox_cron() {
+  // Clear logs
+  if (time() - variable_get("chatbox_lastclear", 0) > variable_get("chatbox_clear", 86400)) {
+    db_query("DELETE FROM {chatevents} WHERE " . time() . " - timestamp > " . variable_get("chatbox_clear", 86400));
+    variable_set("chatbox_lastclear", time());
+  }
+
+  // Check for people leaving
+  _chatbox_checkparts();
+}
+
+function chatbox_settings() {
+  $period = array(3600 => format_interval(3600), 10800 => format_interval(10800), 21600 => format_interval(21600), 32400 => format_interval(32400), 43200 => format_interval(43200), 86400 => format_interval(86400), 172800 => format_interval(172800), 259200 => format_interval(259200), 604800 => format_interval(604800), 1209600 => format_interval(1209600), 2419200 => format_interval(2419200), 1000000000 => "Never");
+  $output .= form_select("Discard logs older than", "chatbox_clear", variable_get("chatbox_clear", 86400), $period, "The time chatbox logs should be kept.  Older entries will be automatically discarded.  Requires crontab.");
+
+  $rate = array(5 => format_interval(5), 10 => format_interval(10), 20 => format_interval(20), 30 => format_interval(30), 60 => format_interval(60)); 
+  $output .= form_select("Chatbox refreshrate", "chatbox_refreshrate", variable_get("chatbox_refreshrate", 10), $rate, "The time a client's browser should wait before refreshing the chatbox.");
+  
+  return $output;
+}
+
+function chatbox_page() {
+
+  if (user_access("view chatbox")) {
+    $page = arg(1);
+    $f = "_chatbox_page_" . ($page ? $page : "launch");
+    if (function_exists($f)) {
+      $f();
+    }
+  }
+  else {
+    print theme("page", message_access(), t("Access Denied"));
+  }
+}
+
+function chatbox_perm() {
+  return array("view chatbox", "join chatbox", "view chatbox log");
+}
+
+/**
+ * Check for people leaving (timing out).
+ */
+function _chatbox_checkparts() {
+  $result = db_query("SELECT * FROM {chatmembers} WHERE %d - timestamp > %d", time(), variable_get("chatbox_refreshrate", 10) + 50);
+  $body = "";
+  while ($member = db_fetch_object($result)) {
+	  //$body = "*** " . t("%nickname has left the chatbox", array("%nickname" => $member->nick));
+	  //db_query("INSERT INTO {chatevents} (body, timestamp) VALUES ('%s', %d)", $body, time() - 2);
+  }
+  if ($body) {
+    db_query("DELETE FROM {chatmembers} WHERE %d - timestamp > %d", time(), variable_get("chatbox_refreshrate", 10) + 50);
+  }
+}
+
+function _chatbox_filter_text($text) {
+  $text = drupal_specialchars($text);
+  return $text;
+}
+
+/**
+ * Output frame for the actual text in the chatbox.
+ */
+function _chatbox_page_text() {
+  global $user;
+  $words = $_POST["words"];
+  // figure nickname
+  if (isset($_GET["nickname"]) && $_GET["nickname"] != "") {
+    $nickname = $_GET["nickname"];
+  }
+  elseif (isset($_POST["nickname"]) && $_POST["nickname"] != "") {
+    $nickname = $_POST["nickname"];
+  }
+  else {
+    srand(time());
+    $nickname = $user->uid ? $user->name : t("Guest") . rand(100, 999);
+  }
+
+  if (user_access("view chatbox")) {
+
+    // Check for expired users
+    // (this is also done here because of the high-frequency requirement)
+    _chatbox_checkparts();
+
+    if (($nickname) && (user_access("join chatbox"))) {
+      // Update this user's status
+      $member = db_fetch_object(db_query("SELECT * from {chatmembers} WHERE nick='%s'", $nickname));
+      if ($member) {
+        db_query("UPDATE {chatmembers} SET timestamp=%d WHERE nick='%s'", time(), $nickname);
+      }
+      else {
+        db_query("INSERT INTO {chatmembers} (nick, timestamp) VALUES ('%s', %d)", $nickname, time());
+
+        //$body = "*** " . t("%nickname has joined the chatbox", array("%nickname" => $nickname));
+        //db_query("INSERT INTO {chatevents} (body, timestamp) VALUES ('%s', %d)", $body, time() - 1);
+      }
+
+	  $nickname = l($nickname,"user/view/$user->uid");
+	  
+        // Insert a user's message into the chatbox
+       if ($words) {
+        if (eregi("^/me ", $words)) {
+          $body = "* " . $nickname . " " . _chatbox_filter_text(substr($words, 3));
+        }
+        else {
+          $body = "&lt;" . $nickname . "&gt; " . _chatbox_filter_text($words);
+        }
+        db_query("INSERT INTO {chatevents} (body, timestamp) VALUES ('%s', %d)", $body, time());
+      }
+    }
+
+    // compute values for $head_extra
+    $limit = (isset($_GET["limit"]) && $_GET["limit"] != "") ? max(5, min(45, $_GET["limit"])) : 30;
+    $refresh = variable_get("chatbox_refreshrate", 10) * 1000;
+    $lastrefresh = $_GET["lastrefresh"];
+
+    if ($lastrefresh) {
+      $newdata = @db_result(db_query("SELECT COUNT(body) FROM {chatevents} WHERE timestamp > %d", $lastrefresh), "count(body)");
+    }
+
+    // Auto-refresh the chatbox if you don't say anything, and refresh the nicknames as well
+    $time = time();
+    $flashwindow = $newdata ? "if (parent.input.document.forms.reminderform.reminder.checked) window.focus();" : "";
+    srand(time());
+    $rand = "&forcerefresh=" . rand(1000, 9999);
+
+    $extra = '
+  <script language="JavaScript" type="text/javascript">
+    function refresh() {
+      location.href = "'. url("chatbox/text", "nickname=$nickname&limit=$limit&lastrefresh=$time", 'bottom', 1) .'";
+    }
+
+    '. $flashwindow .'
+
+    window.setTimeout("refresh();", '. $refresh .');
+    parent.nicklist.location.href = "'. url("chatbox/nicklist$rand", NULL, NULL, 1) .'";
+  </script>';
+    
+    _chatbox_htmlskeleton("Text Frame", _chatbox_view($limit) . $extra);
+  }
+}
+
+/**
+ * Return the text in the chatbox.
+ */
+function _chatbox_view($limit = 20, $timestamp = 1, $mini = 0) {
+	
+	
+  $result = db_query("SELECT * FROM {chatevents}  ORDER BY timestamp DESC" . ($limit ? " LIMIT $limit" : ""));
+  
+  while ($event = db_fetch_object($result)) {
+    if ($mini) {
+      $event->body = wordwrap($event->body, 20, " ", 1);
+    }
+    $text = ($timestamp ? format_date($event->timestamp, "custom", ($timestamp == 1 ? "[H:i] " : "[d/m H:i] ")) : "") . $event->body . "<br />" . $text;
+  }
+  if (!$text) {
+    $text = t("The chatbox is empty") . "<br />";
+  }
+  $text .= '
+  <a id="bottom" name="bottom" />';
+  
+  
+  return $text;
+}
+
+/**
+ * Output the nicklist frame.
+ */
+function _chatbox_page_nicklist() {
+  $result = db_query("SELECT * FROM {chatmembers} ORDER BY nick");
+  $body = '
+    <div class="title">'. t("User list") .'</div>
+    <div class="content">';
+  while ($person = db_fetch_object($result)) {
+    $list[] = "
+        <li>$person->nick</li>";
+  }
+  $body .= ($list 
+    ? '
+      <ul>'. implode("", $list) .'
+      </ul>'
+    : '
+      <p>'. t("No-one") .'</p>'
+  ) .'
+    </div>';
+
+  _chatbox_htmlskeleton("Nicklist Frame", $body);
+}
+
+// Output the frame containing the input form
+function _chatbox_page_input() {
+  global $user;
+  
+  if (user_access("join chatbox")) {
+    srand(time());
+    $nickname = $user->uid ? $user->name : t("Guest") . rand(100, 999);
+    // don't break the next line - this doesn't work in JavaScript
+    $helpmsg = t("When this box is checked, the chatbox will pop up over all your windows when someone says something.  This is useful if you are doing something else while chatting.");
+  
+    $output = '
+    <script type="text/javascript" language="JavaScript">
+      function clearbox() { 
+        document.forms.chatform.words.value = "";
+        document.forms.chatform.words.focus();
+      }
+    </script>
+    <table border="0" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td>
+          <form action="'. url("chatbox/text#bottom") .'" method="post" target="text" name="chatform" onsubmit="setTimeout(\'clearbox()\', 100);">
+            &nbsp;
+            <input type="text" name="words" size="25" />
+            <input type="submit" name="submit" value="'. t("i said it!") .'" />
+            <input type="hidden" name="nickname" value="'. $nickname .'" />
+            <input type="hidden" name="limit" size="3" value="30" />
+          </form>
+        </td>
+        <td align="center">
+          <form action="" method="post" name="reminderform">
+            <input type="checkbox" name="reminder" value="1" /> '. t("Monitor activity") .' [<a href="javascript:window.alert(\''. $helpmsg .'\');">What\'s this?</a>]
+          </form>
+        </td>
+        
+      </tr>
+    </table>';
+  }
+  else {
+    $output .= t("You're not allowed to chat. Try logging in.");    
+  }
+  $head_extra = '
+  <style type="text/css">
+    body, td {
+      background-color: #E3EBD6;
+    }
+  </style>';
+  
+  _chatbox_htmlskeleton("Input Frame", $output, $head_extra);
+}
+
+/**
+ * Output frameholding page for the popup
+ */
+function _chatbox_page_popup() {
+  $title = t("Chatbox") . " - " . variable_get("site_name", "Drupal");
+
+  echo _chatbox_head($title) .'
+</head>
+
+<frameset rows="*,38" border="1" frameborder="1">
+  <frameset cols="*,150" border="1" frameborder="1">
+    <frame name="text" src="'. url("chatbox/text#bottom") .'" border="1" frameborder="1" scrolling="yes" />
+    <frame name="nicklist" src="'. url("chatbox/nicklist") .'" border="1" frameborder="1" scrolling="auto" />
+  </frameset>
+  <frame name="input" src="'. url("chatbox/input") .'" border="1" frameborder="1" marginwidth="0" marginheight="3" scrolling="no" />
+</frameset>
+
+</html>';
+}
+
+/**
+ * Helper function to output a bare HTML file.
+ *
+ * @todo	use theme->header() or something to be consistent with the theme
+ */
+function _chatbox_htmlskeleton($title, $body, $head_extra = "") {
+  echo _chatbox_head($title) . $head_extra .'
+</head>
+
+<body>
+'. $body .'
+</body>
+
+</html>';
+}
+
+/**
+ * Return a consistent <head> for all chat pages / frames.
+ */
+function _chatbox_head($title) {
+  return '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>'. $title .'</title>'. drupal_get_html_head() .'
+  <style type="text/css">
+    body {
+      font: 80% Tahoma, Verdana, Arial, Helvetica, sans-serif;
+      color: #000;
+      background-color: #fff;
+    }
+    table {
+      font-size: 1em;
+    }
+    select {
+      vertical-align: baseline;
+    }
+    .title {
+      font-weight: bold;
+    }
+  </style>';
+}
+
+function _chatbox_page_logs() {
+  print theme("page", _chatbox_view(0, 2), t("Chatbox logs"));
+}
+
+function _chatbox_page_launch() {
+  $autolaunch = $_GET["autolaunch"];
+  
+  $title = eregi_replace("[^A-Za-z]", "", variable_get("site_name", "Drupal") . "chatbox");
+  
+  $output = "<p>". t("The chatbox uses a separate pop-up window, allowing you to browse and chat at the same time.") . "</p>";
+  $output .= '
+  <script language="JavaScript" type="text/javascript">
+    function launchchat() {
+      var w = screen.width - 200;
+      var h = screen.height - 200;
+      var settings = "height = " + h +", width = " + w +", top = 100, left = 100, scrollbars = no, resizable = yes, status = yes";
+      win = window.open("'. url("chatbox/popup"). '", "'. $title .'", settings);
+      win.window.focus();
+    }
+  </script>
+  <noscript>
+    <span class="marker">Warning</span>: You need to enable JavaScript in your browser to use the chatbox.
+  </noscript>';
+  if ($autolaunch) {
+    $output .= '
+  <script language="JavaScript" type="text/javascript">launchchat();</script>
+  '.t('<p>If the chatbox does not automatically launch, you can <a href="javascript:launchchat();">join the chatbox</a> manually.</p>');
+  }
+  else {
+    $output .= '
+  <p><a href="javascript:launchchat();">'. t("Join the chatbox") .'</a></p>';
+  }
+  if (user_access("view chatbox log")) {
+    $output .= '
+  <p>'. l(t("View chatbox logs"), "chatbox/logs") .'</p>';
+  }
+
+  print theme("page", $output, t("Chatbox"));
+}
+
+?>

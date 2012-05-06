@@ -1,0 +1,149 @@
+<?php
+
+// by Moshe Weitzman (weitzmna@tejasa.com)
+
+// TODO
+// modify taxonomy_form() to not mention 'node' in the description and have a 'multiple' override. see http://drupal.org/node/view/6009
+// pass along filter string from query builder url to goto(). use filter string to determine vocabularies to show.
+// maybe use a goto instead of calling taxonomy/view internals
+
+function taxonomy_browser_help($section = "admin/help#taxonomy_browser") {
+  $output = "";
+  switch ($section) {
+    case 'admin/system/modules#description':
+      $output = t("Enable interface for viewing nodes grouped by arbitrary taxonomy terms.");
+      break;
+    case 'admin/help#taxonomy_browser':
+      break;
+  }
+  return $output;
+}
+
+function taxonomy_browser_page() {
+  global $theme;
+  
+  $output = "";
+  drupal_set_title(t("Browser"));
+    
+  if ($edit = $_POST["edit"]) {
+    $output = taxonomy_browser_nodes($edit);
+    if (!$output) {
+      $output = "<div class=\"error\">". t("No listings match what you just put in"). "</div>";
+    }
+  }
+  else {
+  $output .= taxonomy_browser_overview();
+  print theme('page', $output);
+  }
+}
+
+function taxonomy_browser_nodes($edit) {
+	global $base_url;
+	
+  $taxonomy->operator = check_query($edit["operator"]);
+  // remove the '0' tid
+  foreach ($edit["taxonomy"] as $tid) {
+    if ($tid) {
+        $tids[] = $tid;
+    }
+  }
+  $taxonomy->tids = $tids;
+  if (is_array($taxonomy->tids)) {
+	  $taxonomy->str_tids = check_query(implode(",", $taxonomy->tids));
+  }
+  if (empty($taxonomy->str_tids)) {
+	  $taxonomy->str_tids = 0;
+	  
+  }
+  header("Location: " . $base_url . "/?q=taxonomy/page/and/" . $taxonomy->str_tids . "/" . $edit['taxonomy_type']);
+  drupal_set_breadcrumb( array(l(t('Home'), ''), l(t('Browser'), 'taxonomy_browser')));
+  drupal_set_title(t('Browse results'));
+  $taxonomy->type = $edit['taxonomy_type'];
+  $nodes = taxonomy_select_nodes($taxonomy);
+  $_GET["q"] = "taxonomy/view/$taxonomy->operator/$taxonomy->str_tids/" . $edit['taxonomy_type']; //needed for pager to work
+ 
+  
+//return taxonomy_page(taxonomy_render_nodes($nodes));
+}
+
+function taxonomy_browser_overview() {
+
+  $output = "";
+ 
+  //$vocs = variable_get("taxonomy_browser_vocabularies", array());
+  
+  if (arg(1) == "bar" || arg(1) == '') {
+	  $type = 'place-bar';
+	  
+  $froutput .= form_hidden("taxonomy_type", 'place-bar');
+  $output .= taxonomy_form(26,0,0,0);
+  $output .= taxonomy_form(6,0,0,1);
+  //$output .= taxonomy_form(21,0,0);
+  //$output .= taxonomy_form(8,0,0);
+  }
+  
+  elseif (arg(1) == 'restaurant') {
+	  $type = 'place-restaurant';
+	  
+	  $froutput .= form_hidden("taxonomy_type", 'place-restaurant'); 
+	  $output .= taxonomy_form(26,0,0,1);
+	  $output .= taxonomy_form(37,0,0,1);
+	  $output .= taxonomy_form(20,0,0,1);
+	  $output .= taxonomy_form(12,0,0,1);
+ 
+  }
+   elseif (arg(1) == 'shop') {
+	  $type = 'place-shop';
+	  
+	  $froutput .= form_hidden("taxonomy_type", 'place-shop');
+	  $output .= taxonomy_form(26,0,0,1);
+	  $output .= taxonomy_form(38,0,0,1);
+   }
+ elseif (arg(1) == 'outdoor') {
+	  $type = 'place-outdoor';
+	  
+	  $froutput .= form_hidden("taxonomy_type", 'place-outdoor');
+	  $output .= taxonomy_form(26,0,0,1);
+	  $output .= taxonomy_form(39,0,0,1);
+   }  
+ elseif (arg(1) == 'other') {
+	  $type = 'place-other';
+	  
+	  $froutput .= form_hidden("taxonomy_type", 'place-other');
+	  $output .= taxonomy_form(26,0,0,1);
+	  $output .= taxonomy_form(41,0,0,1);
+   }  
+
+  else {
+    $output .= "<div class=\"error\">". t("You must select some vocabularies to display. See %link", array ("%link" => l(t("this administration page"), "admin/system/modules/taxonomy_browser"))). "</div>";
+  }
+  
+  //$froutput .= form_radio(t("Items containing <b>all</b> terms above"), "operator", "and");
+  //$froutput .= form_radio(t("Items containing <b>any</b> terms above"), "operator", "or", 1);
+  
+  $output .= $froutput;
+  
+  $output .= form_submit(t("Find"));
+  return "<form method=\"post\" action=\"?q=taxonomy_browser/" . arg(1) . "\">" . $output . "</form>";
+}
+
+function taxonomy_browser_settings() {
+  $output = form_textarea(t("Guidelines"), "taxonomy_browser_guidelines", variable_get("taxonomy_browser_guidelines", ""), 60, 6, t("Instructions which should appear at top of main query builder page"));
+  $vocabularies = taxonomy_get_vocabularies();  
+  $select[0] = "<". t("none") .">";
+  foreach ($vocabularies as $vocabulary) {
+    $select[$vocabulary->vid] = $vocabulary->name;
+  }
+  $output .= form_select(t("Included Vocabularies"), "taxonomy_browser_vocabularies", variable_get("taxonomy_browser_vocabularies", array ()), $select, t("Select the vocabularies should appear on the taxonomy browser page"), "", 1);
+  return $output;
+}
+
+function taxonomy_browser_link($type) {
+  if ($type == 'system') {
+    menu('taxonomy_browser', t('Category Browser'), 'taxonomy_browser_page', 1, 1);
+  }
+}
+
+
+
+?>

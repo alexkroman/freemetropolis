@@ -1,0 +1,25 @@
+<?php
+// $Id: admin.module,v 1.1.1.1 2004/07/24 19:09:44 alex Exp $
+
+function admin_help($section) {
+  switch ($section) {
+    case "admin/system/modules#description":
+      return t("Handles the administration pages.");
+    case "admin":
+      return t("Welcome to the administration section. Below are the most recent system events.");
+    case "admin/overview":
+      return t("This is a complete overview of the site administration page.");
+  }
+}
+
+function admin_link($type) {
+  if ($type == "system" && user_access("access administration pages")) {
+    menu("admin", t("administer"), "admin_admin", 9);
+  }
+}
+
+function admin_admin() {
+  print theme("page", watchdog_overview("actions"));
+}
+
+?>

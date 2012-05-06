@@ -1,0 +1,652 @@
+<?php
+// $Id: weather.module,v 1.3 2004/10/25 03:11:03 alex Exp $.
+
+function weather_system($field) {
+  $system["description"] = t("Feeds off weatherroom.com xml services and outputs to a block.");
+  return $system[$field];
+}
+
+function weather_settings() {
+  $weather_scale = array(0 => t("Imperial"), 1 => t("Metric"), 2 => t("Both"));
+  $group = form_textfield(t("Enter a zip code or a ICAO (International Civil Aviation Organization) 4-letter airport indentifier code"), "region", variable_get("region", "victoria.bc.ca"), 20, 20, t("This can be a zip code, or a 4-letter, ICAO code (e.g. CYWH, for Victoria, BC). Alternatively, you can view") . " <a href=\"http://www.weatherroom.com/add.html\">" . t("this page") . "</a> " . t("for \"City_Name.State\" and other naming variations. You can obtain international codes at") . " <a href=\"http://weather.noaa.gov/international.html\">weather.noaa.gov</a> " . t("or") . " <a href=\"https://www.notams.jcs.mil/icao/\">www.notams.jcs.mil</a>.");
+  $output = form_group(t("Regional Codes"), $group);
+
+  $group = form_select(t("Display units in imperial, metric, or both"), "weather_scale", variable_get("weather_scale", 0), $weather_scale, t("Select a default scale."));
+  $group .= form_checkbox(t("Show mini-block"), "weather_mini_block", 1, variable_get("weather_mini_block", 0), t("Displays only temperature, wind, and a \"current conditions\" graphic provided by weatherroom.com."));
+  $group .= form_checkbox(t("Show extended forecast"), "weather_extended_forecast", 1, variable_get('weather_extended_forecast', 1), t("5 day forecasts, displayed on a separate page."));
+  $group .= form_checkbox(t("Show XML feed"), "weather_xml_feed", 1, variable_get("weather_xml_feed", 1), t("Provides a link to the local XML weatherfeed, as received from weatherroom.com."));
+  $output .= form_group(t("Display Options"), $group);
+
+  $group = form_checkbox(t("Menu entry for extended forecast"), "weather_menu_option", 1, variable_get('weather_menu_option', 0), t("Adds a forecast link to the user menu."));
+  $group .= form_checkbox(t("Block re-caching"), "weather_recache_cache", 1, variable_get("weather_recache_cache", 0), t("Updates weather block in cached pages for anonymous users"));
+  $group .= form_checkbox(t("Enable cron"), "weather_enable_cron", 1, variable_get("weather_enable_cron", 0), t("Auto-parsed weather data using drupal's cron system"));
+  $output .= form_group(t("Extra Options"), $group);
+
+  return $output;
+}
+
+function weather_block($op = "list", $delta = 0) {
+  if ($op == "list") {
+    $blocks[0]["info"] = t("Weather report");
+    return $blocks;
+  } else {
+    $block["subject"] = t("Weather report");
+    $block["content"] = weather_display_weather();
+    return $block;
+  }
+}
+
+function weather_link($type) {
+  if ($type == "system") {
+    $weather_menu_option = !variable_get("weather_menu_option", 0);
+    menu("weather", t("weather forecast"), "weather_display_forecast", 1, $weather_menu_option);
+    menu("weather/feed", t("xml feed"), "weather_display_feed", 0, 1);
+  }
+}
+
+function weather_cron(){
+  if (variable_get("weather_enable_cron", 0) == 1) {
+    $xweather = new xweather(true);
+    $xweather->init_weather();
+    $xweather->weather_cron();
+  }
+}
+
+function weather_display_weather(){
+  $xweather = new xweather();
+  $xweather->init_weather();
+  return $xweather->display_weather();
+}
+
+function weather_display_forecast() {
+  $breadcrumb[] = l(t("Home"), "");
+  $breadcrumb[] = l(t("weather"), "extended forecast");
+  $xweather = new xweather();
+  $xweather->init_forecast();
+  print theme("page", $xweather->display_forecast(), t("Extended forecast"));
+}
+
+function weather_display_feed() {
+  $weather_remote_timeout = variable_get("weather_remote_timeout", "");
+  if (!empty($weather_remote_timeout)) {
+    print theme("page", t("The XML feed is unavailable."));
+  } else {
+    $xweather = new xml_weather_parser(true);
+    print $xweather->feed;
+  }
+}
+
+function weather_xml_icon($url) {
+  global $base_url;
+  $this_site = preg_replace("/http:\/\//", "", $base_url);
+  $url = variable_get("clean_url", 0) ? $url : '?q=$url';
+  return "<p><div align=\"center\" class=\"xml-icon\"><a href=\"$url\"><img src=\"misc/xml.gif\" width=\"36\" height=\"14\" alt=\"XML feed provided by weatherroom.com and locally hosted by " . $this_site ."\" /></a></div>";
+}
+
+// custom error handler
+function weather_error_handler($type, $msg, $file, $line, $context) {
+  switch($type) {
+    case E_NOTICE:
+      break;
+    case E_WARNING:
+      $weather_error_type[] = "warning";
+      $weather_error_type[] = "non-fatal";
+      break;
+    case E_ERROR:
+      $weather_error_type[] = "error";
+      $weather_error_type[] = "fatal";
+      break;
+    default:
+      return;
+  }
+  if ($type == E_WARNING || $type == E_ERROR) {
+    variable_set("weather_remote_timeout", date("U"));
+    watchdog("$weather_error_type[0]", "weather: a $weather_error_type[1] error occurred at line $line in $file. PHP also reported the following error: $msg.");
+  }
+}
+
+class xweather {
+  var $_weather_scale;
+  var $_weather_xml_feed;
+  var $_weather_mini_block;
+  var $_show_weather_image;
+  var $_region;
+  var $_current_location;
+  var $_current_conditions;
+  var $_current_temperature;
+  var $_current_heatindex;
+  var $_current_windchill;
+  var $_current_humidity;
+  var $_current_visibility;
+  var $_current_pressure;
+  var $_current_dewpoint;
+  var $_current_wind;
+  var $_last_update_time;
+  var $_image;
+  var $_poweredby;
+  var $_copyright;
+  var $page;
+  var $block;
+  var $_block_begin;
+  var $_block_end;
+  var $_cron_run;
+  var $forecast = array();
+
+  // initialize
+  function xweather($cron_run = false) {
+    $this->_cron_run = $cron_run;
+    $this->_region = variable_get("region", "");
+    $this->_weather_scale = variable_get("weather_scale", "");
+    $this->_weather_xml_feed = variable_get("weather_xml_feed", 1);
+    $this->_weather_extended_forecasts = variable_get("weather_extended_forecast", 1);
+    $this->_weather_mini_block = variable_get("weather_mini_block", 0);
+    $this->_show_weather_image = variable_get("show_weather_image", 0);
+    $this->_block_begin = "<!-- weather-block begin -->";
+    $this->_block_end = "<!-- weather-block end -->";
+  }
+
+  function weather_cron() {
+    $this->display_weather();
+  }
+
+  // check if connection error flag has been set within the last 30 minutes
+  function _remote_timeout_error() {
+    if ($weather_remote_timeout = variable_get("weather_remote_timeout", 0)) {
+      if (((date("U") - $weather_remote_timeout) / 60) <= 30) {
+        return true;
+      } else {
+        variable_set("weather_remote_timeout", 0);
+      }
+    }
+    return false;
+  }
+
+  // check for a block/page cache object and load one if found
+  function _cache_is_loaded($object) {
+    if ($this->_cron_run) {
+      return false;
+    }
+    if ($cache = cache_get("weather:$object:" . date("G"))) {
+      return $this->$object = unserialize($cache->data);
+    }
+    return false;
+  }
+
+  // load current weather
+  function init_weather() {
+    if ($this->_cache_is_loaded("block")) {
+      return;
+    }
+    if ($this->_remote_timeout_error()) {
+      return;
+    }
+
+    $xml = new xml_weather_parser();
+    $this->_current_location = $xml->weather["location"];
+    $this->_current_conditions = $xml->weather["conditions"];
+    $this->_current_temperature = $xml->weather["temp"];
+    $this->_current_heatindex = $xml->weather["heatindex"];
+    $this->_current_windchill = $xml->weather["windchill"];
+    $this->_current_humidity = $xml->weather["humidity"];
+    $this->_current_visibility = $xml->weather["visibility"];
+    $this->_current_pressure = $xml->weather["barometer"];
+    $this->_current_dewpoint = $xml->weather["dewpoint"];
+    $this->_current_wind = $xml->weather["wind"];
+    $this->_last_update_time = $xml->weather["updated"];
+    $this->_image = $xml->weather["image"];
+    $this->_poweredby = $xml->weather["poweredby"];
+    $this->_copyright = $xml->weather["copyright"];
+    unset($xml->weather);
+    unset($xml->forecast);
+  }
+
+  // load forecast
+  function init_forecast() {
+    if ($this->_cache_is_loaded("page")) {
+      return;
+    }
+    if ($this->_remote_timeout_error()) {
+      return;
+    }
+    $xml = new xml_weather_parser();
+    $this->_current_location = $xml->weather["location"];
+    $this->_last_update_time = $xml->weather["updated"];
+    $this->_poweredby = $xml->weather["poweredby"];
+    $this->_copyright = $xml->weather["copyright"];
+    // extended forecasts
+    if ($this->_weather_extended_forecasts) {
+      $arraycount = count($xml->forecast);
+      asort($xml->forecast);
+      for ($i = 0; $i < $arraycount; $i++) {
+        $this->forecast[$i] = $xml->forecast[$i];
+        $timeframe = $this->forecast[$i];
+        $this->forecast["$timeframe"]["conditions"] = $xml->forecast["$timeframe"]["conditions"];
+        $this->forecast["$timeframe"]["high"] = $xml->forecast["$timeframe"]["high"];
+        $this->forecast["$timeframe"]["low"] = $xml->forecast["$timeframe"]["low"];
+      }
+      unset($xml->forecast);
+      unset($xml->weather);
+    }
+  }
+
+  // time format ugliness
+  function _get_update_time ($time_date) {
+    list($timestring, $time, $ampm, $timezone) = $this->_get_time($time_date);
+    $month_day_year = $this->_get_day_month_year($time_date, "F j, Y");
+    $weekday = $this->_get_day_month_year($time_date, "l");
+    $hour = $this->_get_hour($time);
+    $minutes = $this->_get_minutes($time);
+    $block_style = $this->_weather_mini_block ? $hour . ":" . $minutes . " " . $ampm . " " . $timezone : $hour . ":" . $minutes . " " . $ampm . " " . $timezone . " " . $weekday . ", " . $month_day_year;
+    return $block_style;
+  }
+
+  function _get_day_month_year($time_date, $format) {
+    if (preg_match("/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/", $time_date, $month)) {
+      if (preg_match("/(\d{1,4}) (\d+)/", $time_date, $day_year)) {
+        $real_date = strtotime($month[0] . " " . $day_year[1] . " " . $day_year[2]);
+        return date($format, $real_date);
+      }
+    }
+  }
+
+  function _get_time($time) {
+    if (preg_match("/(^.*)(AM|PM)(\D{0,5}\d{0,2})/", $time, $ftime)) {
+      return $ftime;
+    }
+  }
+
+  function _get_hour($time) {
+    $time = trim($time);
+    $len = strlen($time);
+    if ($len == 4) {
+      $hour = substr($time, 0, 2);
+    } elseif ($len == 3) {
+      $hour = substr($time, 0, 1);
+    }
+    return $hour;
+  }
+
+  function _get_minutes($time) {
+    $time = trim($time);
+    $len = strlen($time);
+    if ($len == 4) {
+      $minutes = substr($time, 2, 2);
+    } elseif ($len == 3) {
+      $minutes = substr($time, 1, 2);
+    }
+    return $minutes;
+  }
+
+  // conversion functions
+  function _get_direction($wind_dir) {
+    $dir = array();
+    if (preg_match("/(\D{1,3})/", $wind_dir, $dir)) {
+      return $dir[0];
+    }
+  }
+
+  function _get_real_speed($mph) {
+    $speed = array();
+    if (preg_match("/(\d{1,2})/", $mph, $speed)) {
+      return $speed[0];
+    }
+  }
+
+  function _get_speed($mph, $unit) {
+    $speed = $this->_get_real_speed($mph);
+    if (stristr($mph, $unit)) return $speed;
+    if (strtolower($unit) == "mph") return round((double)$speed / 1.609344, 2);
+    if (strtolower($unit) == "km/h") return round((double)$speed * 1.609344, 2);
+  }
+
+  function _get_wind($wind, $unit) {
+    if (stristr($wind, "CALM")) return ucwords(strtolower($wind));
+    $windspeed = $this->_get_speed($wind, $unit);
+    if ($windspeed == 0) return "Calm";
+    $wind_dir = $this->_get_direction($wind);
+    $wind_dir = trim($wind_dir);
+    $wind = eregi("vrb", $wind_dir) ? "variable" : "from the " . $wind_dir;
+    $block_style = $this->_weather_mini_block ? $wind_dir . " " . $windspeed . " " . $unit : $wind . " at " . $windspeed . " " . $unit;
+    return  $block_style;
+  }
+
+  function _get_distance($miles, $unit) {
+
+    if (stristr($miles, $unit)) return $miles;
+    if (strtolower($unit) == "mi") return round((double)$miles / 1.609344, 2) . " " . $unit;
+    if (strtolower($unit) == "km") return round((double)$miles * 1.609344, 2) . " " . $unit;
+  }
+
+  function _get_length($inches, $unit) {
+    if (stristr($inches, $unit)) return $inches;
+    if (strtolower($unit) == "in") return round((double)$inches / 33.86389, 2) . " " . $unit;
+    if (strtolower($unit) == "mb") return round((double)$inches * 33.86389, 2) . " " . $unit;
+  }
+
+  function _get_temp($temp, $unit) {
+    if (stristr($temp, "N/A")) return "N/A";
+    if (stristr($temp, $unit)) return str_replace(" " . $unit, "&deg;" . $unit, $temp);
+    if (strtolower($unit) == "c") return round(((double)$temp - 32) * 5/9, 2) . "&deg;" . $unit;
+    if (strtolower($unit) == "f") return round(((double)$temp * 9/5) + 32, 2) . "&deg;" . $unit;
+  }
+
+  function _get_feels_like($temp, $heatindex, $windchill, $unit) {
+    $threshhold = (stristr($temp, "C") ? 17 : 62);
+    $temp = ((int)$temp > (int)$threshhold) ? $heatindex : $windchill;
+    return $this->_get_temp($temp, $unit);
+  }
+
+  function display_forecast() {
+    if (!$this->_weather_extended_forecasts) {
+      return t("This feature has been disabled by the administrator.");
+    }
+    if (!empty($this->page)) {
+      $output .= $this->page;
+    } else {
+      if (empty($this->_current_location) || empty($this->forecast[$this->forecast[0]]["conditions"])) {
+        $output .= t("The forecast is unavailable. Please refresh or try again later.");
+      } else {
+        $output .= "\t\t<p style=\"font-size: 1em\">" . t("5 day forecast for") . " " . trim($this->_current_location) . "</p>";
+        for ($i = 0; $i < 5; $i++) {
+      	  $forecastfor = $this->forecast[$i];
+          if (preg_match("/_*/", $forecastfor)) {
+            $forecastfor = preg_replace("/_+/", " ", $forecastfor);
+          }
+          $forecastfor = ucwords($forecastfor);
+          $timeframe = $this->forecast[$i];
+          $output .= "<strong>" . $forecastfor . "</strong><br />\n\t\t";
+          $output .= "<div class=\"menu\">\n\t<div class=\"item-list\" style=\"line-height: 1.2em\"><ul>\n\t";
+          $output .= "\n\t\t&nbsp;&nbsp;<li class=\"collapsed\">" . $this->forecast["$timeframe"]["conditions"] . "</li>";
+          $num = substr($this->forecast["$timeframe"]["high"], 0, 1);
+          if (is_numeric($num)) {
+            $output .= "\n\t\t&nbsp;&nbsp;<li class=\"collapsed\">" . t("High") . ": " . ($this->_weather_scale == 0 ? $this->_get_temp($this->forecast["$timeframe"]["high"], "F") : ($this->_weather_scale == 2 ? $this->_get_temp($this->forecast["$timeframe"]["high"], "C") . " (" . $this->_get_temp($this->forecast["$timeframe"]["high"], "F") . ")" : $this->_get_temp($this->forecast["$timeframe"]["high"], "C"))) . "</li>";
+          }
+          $num = substr($this->forecast["$timeframe"]["low"], 0, 1);
+          if (is_numeric($num)) {
+            $output .= "\n\t\t&nbsp;&nbsp;<li class=\"collapsed\">" . t("Low") . ": " . ($this->_weather_scale == 0 ? $this->_get_temp($this->forecast["$timeframe"]["low"], "F") : ($this->_weather_scale == 2 ? $this->_get_temp($this->forecast["$timeframe"]["low"], "C") . " (" . $this->_get_temp($this->forecast["$timeframe"]["low"], "F") . ")" : $this->_get_temp($this->forecast["$timeframe"]["low"], "C"))) . "</li>";
+          }
+          $output .= "\n\t</ul></div></div><br />\n\t";
+        }
+        //$output .= "<font size=\"1\">" . t("Last Updated") . ": " . $this->_get_update_time($this->_last_update_time) . "</font><br>";
+
+        // required by www.weatherroom.com
+        //$output .= "<br />\n\t\t<font size=\"1\">". $this->_copyright . "</font><br /><br />\n\t";
+        //$output .= "<p><font size=\"1\">" . t("Powered by") . " <a href=\"http://" . trim($this->_poweredby);
+        if (strlen($this->_region) <= 5) {
+			//$output .= "/weather?forecast=zandh&pands=" . $this->_region;
+        }
+        //$output .= "\" title=\"www.weatherroom.com: current conditions, weather forecasts, storm advisories and more!\">weatherroom.com</a></font><br />";
+
+        if ($this->_weather_xml_feed) {
+			//$output .= weather_xml_icon("weather/feed");
+        }
+
+        unset($this->forecast);
+
+        // database caching
+        $page = "weather:page:";
+        $cid = $page . date("G");
+        db_query("DELETE FROM {cache} WHERE cid LIKE '$page%'");
+        cache_set($cid, serialize($output), 1);
+      }
+    }
+    return $output;
+  }
+
+  function display_weather() {
+    if (!empty($this->block)) {
+      $output = $this->block;
+    } else {
+      if (empty($this->_current_location) || empty($this->_current_conditions)) {
+        $output = t("The weather report is unavailable. Please refresh or try again later.");
+      } else {
+		  //$mini_block_open = $this->_weather_mini_block ? "\n\t<table border=\"0\" cellpadding=\"2\" cellspacing=\"1\">\n\t<tr><td width=\"55\" style=\"vertical-align: top\"><img src=\"" . $this->_image . "\"></td>\n\t<td style=\"vertical-align: top;\">\n\t" : '';
+		  //$mini_block_close = $this->_weather_mini_block ? "\n\t</td></tr></table><br />\n" : '';
+      	$temp = $this->_weather_mini_block ? '' : t("Temperature") . ": ";
+      	$wind = $this->_weather_mini_block ? '' : t("Wind") . ": ";
+      	//$updated = $this->_weather_mini_block ? "" : t("Last Updated") . ": ";
+      	$list_open = $this->_weather_mini_block ? "\t" : "<ul>\t";
+      	$list_close = $this->_weather_mini_block ? '' : "</ul>";
+      	$item_open = $this->_weather_mini_block ? "\n\t" : "\n\t<li>";
+      	$item_close = $this->_weather_mini_block ? "<br />" : "</li>";
+      	//$current_weather = $this->_weather_mini_block ? t("Current weather for") . " " : t("Current weather conditions for") . " ";
+      	//$div_class = $this->_weather_mini_block ? "\n\t<div style=\"font-size: 0.8em; text-align: left; line-height: 1.3em;\">" : "<div class=\"item-list\" >";
+        $weather_out = "<br /><br />";
+        //$weather_out .= "<p style=\"font-size: 1em\">" . $current_weather . trim($this->_current_location) . "</p>\n";
+        $weather_out .= $mini_block_open . $div_class . $list_open;
+        $weather_out .= $item_open . trim($this->_current_conditions) . $item_close;
+        if (preg_match("/N\/A/i", trim($this->_current_temperature))) {
+          $weather_out .= $item_open . $temp . t("N/A") . $item_close;
+        } else {
+          $weather_out .= $item_open . $temp . ($this->_weather_scale == 0 ? $this->_get_temp($this->_current_temperature, "F") : ($this->_weather_scale == 2 ? $this->_get_temp($this->_current_temperature, "C") . " (" . $this->_get_temp($this->_current_temperature, "F") . ")" : $this->_get_temp($this->_current_temperature, "C"))) . $item_close;
+        }
+        if (!$this->_weather_mini_block) {
+          if (preg_match("/N\/A/i", trim($this->_current_temperature))) {
+            $weather_out .= "\n\t<li>" . t("Feels like") . ": " . t("N/A") . "</li>";
+          } else {
+            $weather_out .= "\n\t<li>" . t("Feels like") . ": " . ($this->_weather_scale == 0 ? $this->_get_feels_like($this->_current_temperature, $this->_current_heatindex, $this->_current_windchill, "F") : ($this->_weather_scale == 2 ? $this->_get_feels_like($this->_current_temperature, $this->_current_heatindex, $this->_current_windchill, "C") . " (" . $this->_get_feels_like($this->_current_temperature, $this->_current_heatindex, $this->_current_windchill, "F") . ")" : $this->_get_feels_like($this->_current_temperature, $this->_current_heatindex, $this->_current_windchill, "C"))) . "</li>";
+          }
+          if (preg_match("/N\/A/i", trim($this->_current_humidity))) {
+            $weather_out .= "\n\t<li>" . t("Relative Humidity") . ": " . t("N/A") . "</li>";
+          } else {
+            $weather_out .= "\n\t<li>" . t("Relative Humidity") . ": " . preg_replace("/%/", "", trim($this->_current_humidity)) . "&#37</li>";
+          }
+          if (preg_match("/^0 /i", trim($this->_current_visibility))) {
+            $weather_out .= "\n\t<li>" . t("Visibility") . ": " . t("unlimited") . "</li>";
+          } else {
+            $weather_out .= "\n\t<li>" . t("Visibility") . ": " . ($this->_weather_scale == 0 ? $this->_get_distance($this->_current_visibility, "mi") : ($this->_weather_scale == 2 ? $this->_get_distance($this->_current_visibility, "km") . " (" . $this->_get_distance($this->_current_visibility, "mi") . ")" : $this->_get_distance($this->_current_visibility, "km"))) . "</li>";
+          }
+          if (preg_match("/N\/A/i", trim($this->_current_pressure))) {
+            $weather_out .= "\n\t<li>" . t("Pressure") . ": " . t("N/A") . "</li>";
+          } else {
+            $weather_out .= "\n\t<li>" . t("Pressure") . ": " . ($this->_weather_scale == 0 ? $this->_get_length($this->_current_pressure, "in") : ($this->_weather_scale == 2 ? $this->_get_length($this->_current_pressure, "mb") . " (" . $this->_get_length($this->_current_pressure, "in") . ")" : $this->_get_length($this->_current_pressure, "mb"))) . "</li>";
+          }
+          if (preg_match("/N\/A/i", trim($this->_current_temperature))) {
+            $weather_out .= "\n\t<li>" . t("Dew Point") . ": " . t("N/A") . "</li>";
+          } else {
+      	    $weather_out .= "\n\t<li>" . t("Dew Point") . ": " . ($this->_weather_scale == 0 ? $this->_get_temp($this->_current_dewpoint, "F") : ($this->_weather_scale == 2 ? $this->_get_temp($this->_current_dewpoint, "C") . " (". $this->_get_temp($this->_current_dewpoint, "F") . ")" : $this->_get_temp($this->_current_dewpoint, "C"))) . "</li>";
+          }
+        }
+        //$weather_out .= $item_open . $wind . ($this->_weather_scale == 0 ? $this->_get_wind($this->_current_wind, "mph") : ($this->_weather_scale == 2 ? $this->_get_wind($this->_current_wind, "km/h") . " (" . $this->_get_speed($this->_current_wind, "mph") . " mph)" : $this->_get_wind($this->_current_wind, "km/h"))) . $item_close;
+        //$weather_out .= $item_open . $updated . $this->_get_update_time($this->_last_update_time) . $item_close;
+        $weather_out .= $list_close . $mini_block_close;
+		$link = variable_get("clean_url", 0) ? 'weather' : '?q=weather';
+		$weather_out .= "\n<a href=\"$link\">" . t("5 day forecast") . "</a><br />\n";
+        
+        
+
+        // database caching/re-caching
+        if (variable_get("cache", 0) == 1 && variable_get("weather_recache_cache", 0) == 1) {
+          $result = db_query("SELECT * FROM {cache} WHERE cid LIKE '%/%'");
+          while ($cache = db_fetch_object($result)) {
+       	    $this->_weather_recache_block($cache->cid, $cache->data, $weather_out);
+       	  }
+        }
+        $output = $this->_block_begin.$weather_out.$this->_block_end;
+        $block = "weather:block:";
+        $cid = $block . date("G");
+        db_query("DELETE FROM {cache} WHERE cid LIKE '$block%'");
+        cache_set($cid, serialize($output), 1);
+      }
+    }
+    return $output;
+  }
+
+  function _weather_recache_block($cache_id, $page_cache, $new_cache_block) {
+    if ($start_pos = strpos($page_cache, $this->_block_begin) + strlen($this->_block_begin)) {
+      if ($end_pos = strpos($page_cache, $this->_block_end, $start_pos)) {
+        $result = substr($page_cache, 0, $start_pos);
+        $result .= $new_cache_block;
+        $result .= substr($page_cache, $end_pos);
+        cache_set($cache_id, $result, 1);
+      }
+    }
+  }
+}
+
+class xml_weather_parser {
+  var $_tag = "";
+  var $_day = "";
+  var $_xml_parser;
+  var $_region;
+  var $_extended;
+  var $feed;
+  var $weather = array();
+  var $forecast = array();
+
+  function xml_weather_parser($print_feed = false) {
+    // save the region
+    $this->_region = variable_get("region", "");
+
+    $host = "weatherroom.com";
+    $uri = "xml/ext/".$this->_region;
+    $weather_input = "";
+
+    // I/O error-handling hack
+    set_error_handler("weather_error_handler");
+
+    // 10 second timeout
+    $fp = fsockopen($host, 80, $errno, $errstr, 10);
+
+    // return error-handling to drupal
+    restore_error_handler();
+
+    if (!$fp) {
+      return;
+    } else {
+      $request  = "GET /$uri HTTP/1.1\r\n";
+      $request .= "User-Agent: Drupal Weather/Experimental\r\n";
+      $request .= "Host: $host\r\n";
+      $request .= "Accept: image/gif, image/x-xbitmap,image/jpeg, image/pjpeg, */*\r\n\r\n";
+      $request .= "Content-Type: text/xml\r\n";
+      fputs($fp, $request);
+      while (!feof($fp)) $weather_input .= fgets($fp, 4096);
+      fclose ($fp);
+    }
+
+    $weather_input = trim($weather_input);
+    if (strlen($weather_input)) {
+      $weather_input = substr($weather_input, strpos($weather_input, "<?xml"));
+      if (substr($weather_input, -1, 1) != ">") {
+        $weather_input = substr($weather_input, 0, -1);
+      }
+      $weather_input = preg_replace("|&#0176;|", " ", $weather_input);//AFL
+    }
+
+    if ($print_feed) {
+      return $this->feed = $weather_input;
+    }
+
+    // create the parser and parse out the file
+    $xml_parser = @xml_parser_create();
+    $this->_xml_parser = $xml_parser;
+    xml_set_object($this->_xml_parser, $this);
+    xml_set_element_handler($this->_xml_parser, "start_element", "end_element");
+    xml_set_character_data_handler($this->_xml_parser, "character_data");
+    xml_parse($this->_xml_parser, $weather_input);
+    xml_parser_free($this->_xml_parser);
+  }
+
+  // load tag
+  function start_element($parser, $tagName, $attrs) {
+    $this->_tag = $tagName;
+  }
+
+  // free tag
+  function end_element($parser, $tagName) {
+    $this->_tag = "";
+  }
+
+  // process & store text data for our weather class
+  function character_data($parser, $data) {
+    if ($this->_tag == "")
+      return;
+
+    // we only write local data that we'll re-use, skipping names, attrs, etc
+    if (preg_match("/internal|weatherfeed|config|current/i", $this->_tag))
+      return;
+
+     // clear extended forecast flag
+    if (preg_match("/poweredby/i", $this->_tag))
+      $this->_extended = false;
+
+    // clean whitespace
+    $data = trim($data);
+
+    // extended forecast support
+    if (preg_match("/this_.*|.*ing|afternoon|.*day|.*night/i", $this->_tag)) {
+      $this->_day = ucwords(strtolower($this->_tag));
+      $this->forecast[] = $this->_day;
+    }
+
+    switch ($this->_tag) {
+      case "CONDITIONS":
+        if ($this->_extended) {
+          $this->forecast["$this->_day"]["conditions"] = $data;
+        } else {
+          $this->weather["conditions"] = $data;
+        }
+        break;
+      case "HIGH":
+        $this->forecast["$this->_day"]["high"] = $data;
+        break;
+      case "LOW":
+        $this->forecast["$this->_day"]["low"] = $data;
+        break;
+      case "LOCATION":
+        $this->weather["location"] = $data;
+        break;
+      case "RECORDEDAT":
+        $this->weather["recordedat"] = $data;
+        break;
+      case "UPDATED":
+        $this->weather["updated"] = $data;
+        break;
+      case "TEMP":
+        $this->weather["temp"] = $data;
+        break;
+      case "WINDCHILL":
+        $this->weather["windchill"] = $data;
+        break;
+      case "HEATINDEX":
+        $this->weather["heatindex"] = $data;
+        break;
+      case "VISIBILITY":
+        $this->weather["visibility"] = $data;
+        break;
+      case "BAROMETER":
+        $this->weather["barometer"] = $data;
+        break;
+      case "DEWPOINT":
+        $this->weather["dewpoint"] = $data;
+        break;
+      case "HUMIDITY":
+        $this->weather["humidity"] = $data;
+        break;
+      case "WIND":
+        $this->weather["wind"] = $data;
+        break;
+      case "UPDATED":
+        $this->weather["updated"] = $data;
+        break;
+      case "IMAGE":
+        $this->weather["image"] = $data;
+        break;
+      case "POWEREDBY":
+        $this->weather["poweredby"] = $data;
+        break;
+      case "COPYRIGHT":
+        $this->weather["copyright"] = $data;
+        break;
+
+      default:
+        break;
+    }
+
+    // set extended forecast flag
+    if (preg_match("/time/i", $this->_tag)) {
+      $this->_extended = true;
+    }
+  }
+}
+?>

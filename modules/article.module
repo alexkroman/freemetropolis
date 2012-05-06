@@ -1,0 +1,377 @@
+<?php
+/**
+  Article Module - an easy to use intergrated article management module.
+
+  The article module allows for articles to be organized and displayed in
+  a cenrtalized location. In essence it is a specialized taxonomy display
+  module with some specific features that make it sutible for articles.
+  
+  @author Nicholas Young-Soares
+  @package module_article
+
+  @defgroup module_article an easy to use intergrated article management module.
+  @{
+**/
+
+/* $Id: article.module,v 1.1.1.1 2004/07/24 19:09:44 alex Exp $ */
+
+/**
+  Hook Block - displays the latest articles list in a block.
+
+  @param op the operation to be preformed. (default="list")
+  @param delta the block to be displayed. (default=0)
+  
+  @return an array containin the block output.
+**/
+function article_block($op = "list", $delta = 0) {
+  if ($op == "list") {
+    $blocks[0]["info"] = t("Latest Articles");
+  }
+  elseif (user_access("access content")) {
+    $content = node_title_list(article_get_latest(), "");
+
+    if ($content) {
+      $content .= theme("more_info", l(t("more"), "article", array("title" => t("Read more articles."))));
+    }
+
+    $blocks["subject"] = t("Latest Articles");
+    $blocks["content"] = $content;
+  }
+
+  return $blocks;
+}
+
+
+/**
+  Hook Help - displays help and general information about the module.
+
+  @param section specifies the section to display help for.
+  
+  @return a formated string containing the help output.
+**/
+function article_help($section = "admin/help#article") {
+  $output = "";
+
+  switch ($section) {
+    case 'admin/system/modules#description':
+      $output = t("Provides article specific functions.");
+      break;
+  }
+  return $output;
+}
+
+
+/**
+  Hook Link - returns links to the article module.
+
+  @param type specifies the type of link to display. (page or admin)
+  @param node 
+  
+  @return an array of links.
+**/
+function article_link($type, $node) {
+
+  $links = array();
+
+  if ($type == "page" && user_access("access content")) {
+    $links[] = l(t(variable_get("article_title", "articles")), "article", array("title" => t("Article listings.")));
+  }
+
+  if ($type == "system") {
+    if (user_access("access content")) {
+      menu("article", t("articles"), "article_page", 0, 1);
+    }
+  }
+     
+  return $links;
+}
+
+
+/**
+  Hook Settings - admin settings for the article module.
+  
+  @return a formatted settings form.
+**/
+function article_settings() {
+  $vocabularies = taxonomy_get_vocabularies();
+  foreach ($vocabularies as $vocabulary) {
+    $select[$vocabulary->vid] = $vocabulary->name;
+  }
+  $output  = form_select(t("Article Vocabularies"), "article_vocab", variable_get("article_vocab", array()), $select, t("Select the vocabularies which contain the Article categories."), "", 1);
+  $output .= form_textfield("Overview Title", "article_title", variable_get("article_title", t("Articles")), 35, 255, t("Title of the Articles box."));
+  return $output;
+}
+
+
+/**
+ Hook Page - displays the main article page.
+
+ @return null.
+**/
+function article_page() { 
+  $body = "";
+  if (arg(1) == "feed") {
+    $taxonomy->operator = "or";
+    $taxonomy->tids = article_get_article_terms();
+    $taxonomy->str_tids = check_query(implode(",", $taxonomy->tids));
+    taxonomy_feed($taxonomy);
+  }
+  else {
+    if (arg(1) != NULL) {    
+      $breadcrumb = drupal_get_breadcrumb();;
+      $term = article_build_breadcrumbs($breadcrumb);
+      drupal_set_breadcrumb($breadcrumb);
+      
+      if ($term != NULL) {
+        $content = article_index($term->tid);
+        if ($content != "") {
+          $body = theme("box", $term->name . "- Sub Categories", $content);
+        }
+
+        $taxonomy->operator = "or";
+        $taxonomy->tids = $term->tid;
+        $taxonomy->str_tids = $taxonomy->tids;
+        print theme("page", $body . taxonomy_render_nodes(taxonomy_select_nodes($taxonomy)));
+      }
+    }
+    else {
+      $body = theme("box", t("Latest Articles"), node_title_list(article_get_latest(), "") . theme("more_info", l("<img src=\"misc/xml.gif\" alt=\"XML Feed\" \>", "article/feed")));
+      $content = article_index();
+      if ($content != "") {
+        print theme("page", $body . theme("box", t("Articles"), $content));
+      }
+    }
+  } 
+}
+
+
+/**
+  Constructs a url from the current url arguments list. 
+    
+  @return a string containing a formated URL.
+**/
+function article_get_current_url() {
+  $arg_index = 1;
+  $url = arg(0);
+  while ($argument = arg($arg_index)) {
+    $url .= "/". urlencode($argument);
+    $arg_index++;
+  }
+  return $url;
+}
+
+
+/**
+ Constructs the article index page, using theme functions.
+
+ @return a string containing the output ready for display.
+**/
+function article_index($tid = 0) {
+  $output = "";
+  
+  $vocabularies = article_get_vocabularies();
+  foreach ($vocabularies as $vocab) {
+    $vocab_tree = taxonomy_get_tree($vocab->vid, $tid);  
+    $content = '';
+
+    while (current($vocab_tree) != NULL) {
+      $content .= article_build_index($vocab_tree, article_get_current_url());
+    }
+    
+    if ($content != "") {
+      $output .= theme("article_index", $vocab->name, $content);
+    }
+  }
+
+  return $output;
+}
+
+
+/**
+ Recursivly traverses the term tree to construct the index.
+
+ @return string the output for this tree.
+**/
+function article_build_index(&$tree, $parent_url) {
+  $output = "";
+ 
+  if ($tree == array()) {
+    return "";
+  }
+  
+  do {
+    $cur = current($tree);
+    $nex = next($tree);
+    if ($nex === false) {
+      $next_depth = -1;
+    }
+    else {
+      $next_depth = $nex->depth;
+    }
+    
+    $cur->link = $parent_url . '/' . urlencode(strtolower(trim($cur->name)));
+    
+    $cur->children = "";
+    if ($next_depth > $cur->depth) {
+      $cur->children = article_build_index($tree, $cur->link);
+    }
+    
+    $cur->count = taxonomy_term_count_nodes($cur->tid);
+    
+    $output .= theme("article_index_item", $cur);
+  }while ($cur->depth == $next_depth);
+  
+  return theme("article_list", $output);
+}
+
+
+/**
+ Gets all the vocabularies that are associated with the article module.
+
+ @return array the vocabularies.
+**/
+function article_get_vocabularies() {
+  $allvocabularies = taxonomy_get_vocabularies();
+  $article_vocabs = variable_get("article_vocab", array());
+  $vocabularies = array();
+  foreach ($article_vocabs as $vocab) {
+    $vocabularies[] = $allvocabularies[$vocab];
+  }
+  return $vocabularies;
+}
+
+
+/**
+ Get all the terms associated with Articles.
+
+ @return an array of unique term ids.
+**/
+function article_get_article_terms() {
+  $vocabs = article_get_vocabularies();
+  $tids = array();
+  foreach ($vocabs as $vocab) {
+    $tids = array_merge($tids, article_tax_get_terms($vocab->vid));
+  }
+  return array_unique($tids);
+}
+
+
+/**
+ Get all the terms in a given vocabulary.
+
+ @return an array of unique term ids.
+**/
+function article_tax_get_terms($vid) {
+  $result = db_query("SELECT tid FROM {term_data} WHERE vid = %d", $vid);
+  $tids = array();
+  while ($term = db_fetch_array($result)) {
+    $tids[] = $term["tid"];
+  }
+  return array_unique($tids);
+}
+
+
+/**
+ Get the latest articles
+
+ @return a database query result.
+**/
+function article_get_latest() {
+  $taxonomy->operator = "or";
+  $taxonomy->tids = article_get_article_terms();
+  $taxonomy->str_tids = check_query(implode(",", $taxonomy->tids));
+  
+  return taxonomy_select_nodes($taxonomy);
+}
+
+
+/**
+ Builds a breadcrumb list.
+ 
+ @param breadcrumb a reference to the breadcrumb array. New items will be appending to this array.
+
+ @return returns a term object if the last item in the url is a term, otherwise returns NULL.
+**/
+function article_build_breadcrumbs(&$breadcrumb) {
+  if (arg(1) != NULL) {
+    $i = 1;
+    $url = "article";
+    while (arg($i) != NULL) {
+      $last_term = urldecode(arg($i));
+      $url = $url . '/' . urlencode($last_term);
+      $breadcrumb[] = l(ucwords($last_term), $url);
+      $i++;
+    }
+    
+    $term = current(taxonomy_get_term_by_name($last_term));
+    return $term;
+  }
+  return NULL;
+}
+
+/**  @} End of the module_article group **/
+
+
+/** 
+  @addtogroup theme_system
+
+  Article module specific theme functions.
+  @{
+**/
+
+
+/**
+ Controls the output of the rendered index list.
+
+ @return string the output for the index list.
+**/
+function theme_article_index(&$name, &$index_list) {
+  if ($index_list != "") {
+    return "<div class=\"item-list\">\n$index_list\n</div>\n";
+  }
+  return "";
+}
+
+
+/**
+ Displays a single one level list. Called for each group of items at the same depth.
+
+ @return string the output for this list.
+**/
+function theme_article_list(&$output) {
+  if ($output != "") {
+    return "<ul>". $output ."</ul>\n";
+  }
+  return "";
+}
+
+
+/**
+ Displays a single index item. 
+
+ @return string the output for this item.
+**/
+function theme_article_index_item(&$term) {
+  $description = ($term->description != "") ? "<p class=\"article-desc\">". $term->description ."</p>" : "";
+  if ($term->count > 0) {
+    return "<li ><div class=\"article-title\">". l($term->name ." ($term->count)", $term->link) ."</div>". $description.$term->children ."</li>";
+  }
+  else {
+    return "<li><div class=\"article-title\">". $term->name ." ($term->count)</div>". $description.$term->children ."</li>";
+  }
+}
+
+
+/**
+ Displays more information content, suck as "more" links, and
+ feed images. 
+
+ @return formatted string containint the output.
+**/
+function theme_more_info($content) {
+  return "<div class=\"more-link\">". $content ."</div>";
+}
+
+/**  @} End of addtogroup theme_system **/
+
+?>

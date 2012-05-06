@@ -1,0 +1,282 @@
+<?php
+// $Id: taxonomy_otf.module,v 1.5 2004/08/08 23:40:04 njivy Exp $
+
+/**
+ * hook_help() implementation
+ */
+function taxonomy_otf_help($section = 'admin/help#taxonomy_otf') {
+  $output = '';
+
+  switch ($section) {
+
+    case 'admin/modules#description':  // Displayed in admin/system/modules where modules are enabled/disabled
+      $output = t('Users can add terms on-the-fly as they post.');
+      break;
+    case 'admin/settings/taxonomy_otf':
+      $output = t("Below are the settings for the taxonomy_otf module, a mechanism for adding taxonomy terms on-the-fly.  Users who are granted permission can specify new terms--i.e. categories--for their post while creating the post.  The syntax is straight forward.  Simply type as many new terms desired, one term per line.  Terms that already exist will be untouched.  Nested terms may be created like this: term/sub-term. New terms will not form loops in the taxonomy tree.");
+      break;
+
+  }
+
+  return $output;
+}
+
+/**
+ * hook_perm() implementation
+ */
+function taxonomy_otf_perm() {
+  return array("create terms on-the-fly", "administer taxonomy_otf");
+}
+
+/**
+ * hook_settings() implementation
+ *
+ * Select which vocabularies can be modified on-the-fly. The values are stored in
+ * an array, which is stored using variable_set('taxonomy_otf_vocabularies', '').
+ */
+function taxonomy_otf_settings() {
+  $otf_vocabularies = variable_get('taxonomy_otf_vocabularies', array());
+
+  $result = db_query('SELECT vid,name FROM {vocabulary}');
+  while ($t = db_fetch_object($result)) {
+    $vocabularies[$t->vid] = $t->name;
+  }
+
+  $output = form_select(t('Vocabularies'), 'taxonomy_otf_vocabularies', $otf_vocabularies, $vocabularies, t('Select vocabularies that can be modified on-the-fly.'), 0, 1);
+  $output .= form_checkbox(t('Case-insensitive comparisons'), 'taxonomy_otf_case_insensitive', 1, variable_get('taxonomy_otf_case_insensitive', 0), t('Do case-insensitive comparisons between new terms and existing terms. If a new term matches an existing term, the new term will not be created.'));
+
+  return form_group(t('Settings'), $output);
+}
+
+/**
+ * hook_nodeapi() implementation
+ */
+function taxonomy_otf_nodeapi(&$node, $op, $arg) {
+  if (user_access('create categories on-the-fly') || user_access('administer taxonomy_otf')) {
+    $otf_vocabularies = variable_get('taxonomy_otf_vocabularies', array());
+    
+    switch ($op) {
+      case 'validate':
+        //
+        // "validate": The user has just finished editing the node and is trying to 
+        // preview or submit it. This hook can be used to check or even modify the 
+        // node. Errors should be set with form_set_error().
+        //
+        break;
+      case 'form post':
+        //
+        // "form post": The node form is about to be displayed. This hook can be used 
+        // to add fields at the bottom of the form.
+        //
+        $result = db_query('SELECT vid,name FROM {vocabulary} WHERE vid IN (%s) AND nodes LIKE "%%%s%%"', implode(',', $otf_vocabularies), $node->type);
+        while ($t = db_fetch_object($result)) {
+          $output .= "blah" . form_textarea(t('Add terms to %a', array('%a'=>$t->name)), 'otf_categories_'.$t->vid, $node->{'otf_categories_'.$t->vid}, 60, 3);
+        }
+        return form_group(t('Create new terms'), $output, 
+                          t('Terms may be created by entering one term per line.  Terms are %a.  Sub-terms should be preceded by a slash.<br />Example: term/sub-term', 
+                             array('%a'=>(variable_get('taxonomy_otf_case_insensitive', 0) ? t('case-insensitive') : t('case-sensitive')))
+                          ));
+      case 'insert':
+      case 'update':
+        //
+        // "insert": The node is being created (inserted in the database).
+        // "update": The node is being updated.
+        //
+
+        //
+        // Grab the current terms for this node, since this info is not in $node.
+        //
+        $node_terms = array();
+        $result = db_query('SELECT tid FROM {term_node} WHERE nid=%d', $node->nid);
+        while ($t = db_fetch_object($result)) {
+          $node_terms[] = $t->tid;
+        }
+
+        $result = db_query('SELECT vid FROM {vocabulary} WHERE vid IN (%s)', implode(',', $otf_vocabularies));
+        while ($t = db_fetch_object($result)) {
+          if ($node->{'otf_categories_'.$t->vid}) {
+            $otf_terms = _taxonomy_otf_parse_terms($node->{'otf_categories_'.$t->vid});
+            $new_tids = _taxonomy_otf_save_terms($otf_terms, $t->vid);
+          }
+        }
+        taxonomy_node_save($node->nid, array_merge($node_terms, $new_tids));
+    }
+  }
+}
+
+/**
+ * Parse user input for terms
+ *
+ * This function takes the user input from the node/add or node/edit form and returns
+ * a multi-dimensional array suitable for _taxonomy_save_terms();
+ *
+ * @param $otf_input The raw input from the user form
+ * @return $terms A multi-dimensional array:
+ *                $terms[$term_name] = array('parent'=>$parent_name, 'node'=>$node_is_here)
+ */
+function _taxonomy_otf_parse_terms($otf_input) {
+  $lines = explode("\n", $otf_input);
+  foreach ($lines AS $line) {
+    //
+    // Reset $parent to the root of the vocabulary
+    //
+    $parent = 0;
+    $elements = explode('/', $line);
+    foreach ($elements AS $element) {
+      $element = trim($element);
+      $terms[$element] = array('parent'=>$parent, 'node'=>0);
+      $parent = $element;
+    }
+    //
+    // The last $element is the term that applies to the node.
+    //
+    $terms[$element]['node'] = 1;
+  }
+  return $terms;
+}
+
+/**
+ * Save new taxonomy terms
+ *
+ * This function saves taxonomy terms, if they do not already exist.  Nested terms are supported.
+ *
+ * @param $terms A multi-dimensional array
+ *               $terms[$term_name] = array('parent'=>$parent_name, 'node'=>$node_is_here)
+ * @param $vid The vocabulary ID
+ *
+ * @return $tids An array of new term IDs
+ */
+function _taxonomy_otf_save_terms($terms, $vid) {
+  $case_insensitive = variable_get('taxonomy_otf_case_insensitive', 0);
+
+  //
+  // We need to check if the terms exist and if they exist with the specified
+  // heirarchy.  If they do not exist, create them.  If not with the specified heirarchy,
+  // create the heirarchy.  But don't make terms the children of themselves.  No loops
+  // in the heirarchy.
+  //
+
+  $tids = array();
+  foreach ($terms AS $term_name=>$term) {
+    $child = '';
+    $parent = '';
+    //
+    // Parents are processed before children, so they should exist by this point.
+    //
+    if ($case_insensitive) {
+      $result = db_query('SELECT td.*, v.hierarchy 
+                         FROM {term_data} td
+                           LEFT JOIN {vocabulary} v ON td.vid=v.vid
+                         WHERE UPPER(td.name)=UPPER("%s")', check_query($term_name));
+    }
+    else {
+      $result = db_query('SELECT td.*, v.hierarchy 
+                         FROM {term_data} td
+                           LEFT JOIN {vocabulary} v ON td.vid=v.vid
+                         WHERE td.name="%s"', check_query($term_name));
+    }
+    if (!db_num_rows($result)) {
+      //
+      // Term does not exist, so create it.
+      //
+      $result = db_query('INSERT INTO {term_data} (vid, name) VALUES (%d, "%s")', $vid, check_query($term_name));
+
+      //
+      // Determine what the automatically assigned ID turned out to be. Since we didn't get
+      // everything with the first SELECT, grab the parent again.
+      //
+      $term['parent'] && $parent_sql = ' OR name="%s"';
+      $result = db_query('SELECT * FROM {term_data} WHERE name="%s"'.$parent_sql, 
+                         check_query($term_name), check_query($term['parent']));
+      while ($t = db_fetch_object($result)) {
+        if ($t->name == $term_name) { 
+          $child = $t;
+          //
+          // If the node is in this term, save the tid.
+          //
+          $term['node'] && $tids[] = $child->tid;
+        }
+        else {
+          $parent = $t;
+        }
+      }
+      !$parent && $parent->tid = 0;
+       
+      //
+      // Insert the term into the tree. The term is a leaf, of course.  That's why
+      // we didn't check to see if one of its new ancestors are also its descendants.
+      //
+      $result = db_query('INSERT INTO {term_hierarchy} (tid, parent) VALUES (%d, %d)', $child->tid, $parent->tid);
+    }
+    else {
+      //
+      // The term already exists in the database, so check for potential loops in the tree.
+      // Also check if the term already exists at this location in the tree.  If all is 
+      // okay, re-insert the node into the tree.  Oh, check the vocabulary to see if 
+      // multiple inheritance is okay.
+      // 
+      $child = db_fetch_object($result);
+
+      //
+      // If the node is in this term, save the tid.
+      //
+      $term['node'] && $tids[] = $child->tid;
+
+      if ($case_insensitive) {
+        $result = db_query('SELECT * FROM {term_data} WHERE UPPER(name)=UPPER("%s")', check_query($term['parent']));
+      }
+      else {
+        $result = db_query('SELECT * FROM {term_data} WHERE name="%s"', check_query($term['parent']));
+      }
+      $parent = db_fetch_object($result);
+     
+
+      //
+      // Multiple inheritance has value of 2.  If multiple inheritance is not allowed,
+      // we cannot put the term in an additional location in the tree.
+      //
+      if ($child->hierarchy == 2) {
+        $children = taxonomy_get_tree($child->vid, $child->tid);
+
+        foreach ($children AS $c) {
+          if ($parent->tid == $c->tid) {
+            //
+            // The new $parent is already a child, so abort trying to insert
+            // at this point in the tree. Go to the next 
+            // foreach($terms AS $term_name=>$term).
+            //
+            drupal_set_message(t('Could not create sub-term "%a" under "%b" because "%b" is already a sub-term of "%a".', 
+                               array('%a'=>$term_name, '%b'=>$term['parent'])));
+            continue 2;
+          }
+        }
+
+        //
+        // Check if the term exists at the desired location in the tree.  If so,
+        // do not re-insert it.
+        //
+        $result = db_query('SELECT * 
+                           FROM {term_hierarchy} 
+                           WHERE tid=%d AND parent=%d', 
+                           $child->tid, $parent->tid);
+
+        if (db_num_rows($result)) {
+          //
+          // The term exists at the desired location already.  Skip to the next term.
+          //
+          continue;
+        }
+
+        //
+        // If we survived the previous loop, it's okay to insert the $term into
+        // the tree at the intended location.
+        //
+        $result = db_query('INSERT INTO {term_hierarchy} (tid, parent) VALUES (%d, %d)', $child->tid, $parent->tid);
+      }
+    }
+  }
+
+  cache_clear_all();
+  return $tids;
+}
+?>

@@ -1,0 +1,17 @@
+textile.module
+INSTALL
+$Id: INSTALL,v 1.1.6.3 2004/05/29 17:17:35 jhriggs Exp $
+
+Installation of textile.module could not be simpler. Simply copy the
+textile directory, containing the textile.module file and
+smartypants-php and textilephp directories to your Drupal modules
+directory. Then log into your site and go to the module configuration
+page and enable the Textile module. If you are using the title module,
+you will need to ensure that Textile comes before the title module on
+the filter ordering page.
+
+NOTE: Drupal's current filter implementation is not the most efficient
+and will be reworked in upcoming releases. This module should perform
+well on most sites; however, extremely busy sites may experience a
+performance hit (especially with caching disabled) performing all of
+the regular expression matching involved with Textile.

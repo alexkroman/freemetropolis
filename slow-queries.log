@@ -1,0 +1,280 @@
+0.03724217414856 seconds SELECT u.*, s.*, r.name AS role FROM users u INNER JOIN sessions s ON u.uid = s.uid LEFT JOIN role r ON u.rid = r.rid WHERE s.sid = '81becf22c7d776879195363a6c42d71b' AND u.status < 3 LIMIT 0, 1 from: /~alex/freemet/index.php
+0.0089969635009766 seconds SELECT * FROM variable  from: /~alex/freemet/index.php
+0.021630048751831 seconds SELECT data, created, headers FROM cache WHERE cid = '/~alex/freemet/?q=user/login/1d23ddfdddddsddsddd' from: /~alex/freemet/index.php
+0.0012478828430176 seconds SELECT * FROM url_alias from: /~alex/freemet/index.php
+0.0043308734893799 seconds SELECT name, filename, throttle, bootstrap FROM system WHERE type = 'module' AND status = 1 from: /~alex/freemet/index.php
+0.0017490386962891 seconds SELECT p.perm FROM role r, permission p WHERE r.rid = p.rid AND r.rid = 1 from: /~alex/freemet/index.php
+0.0019450187683105 seconds SELECT * FROM system where type = 'theme' AND status = '1' ORDER BY name from: /~alex/freemet/index.php
+0.0009620189666748 seconds SELECT * FROM access WHERE status = '1' AND type = 'user' AND LOWER('') LIKE LOWER(mask) from: /~alex/freemet/index.php
+0.001115083694458 seconds SELECT * FROM access WHERE status = '0' AND type = 'user' AND LOWER('') LIKE LOWER(mask) from: /~alex/freemet/index.php
+0.0018539428710938 seconds SELECT * FROM blocks WHERE (status = '1' OR custom = '1') AND region = 0 ORDER BY weight, module from: /~alex/freemet/index.php
+0.070946931838989 seconds SELECT COUNT(DISTINCT sid) AS count FROM sessions WHERE timestamp >= 1107361933 AND uid = 0 from: /~alex/freemet/index.php
+0.034197092056274 seconds SELECT DISTINCT uid, MAX(timestamp) AS max_timestamp FROM sessions WHERE timestamp >= 1107361933 AND uid != 0 GROUP BY uid ORDER BY max_timestamp DESC from: /~alex/freemet/index.php
+0.0017459392547607 seconds SELECT * FROM blocks WHERE (status = '1' OR custom = '1') AND region = 1 ORDER BY weight, module from: /~alex/freemet/index.php
+0.023271083831787 seconds UPDATE cache SET data = '<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">
+<head>
+<title>Log in | Portland Free Metropolis</title>
+<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />
+<base href=\"http://localhost/~alex/freemet/\" />
+<style type=\"text/css\" media=\"all\">
+@import url(misc/drupal.css);
+</style>
+<style type=\"text/css\">@import url(modules/rsvp/rsvp.css);</style>
+
+<meta name=\"description\" content=\"\" />
+<meta name=\"keywords\" content=\"portland, hawthorne, belmont, music, punk, blog, diary, events, listings, citysearch\" />
+<meta name=\"rating\" content=\"General\" />
+<meta name=\"ROBOTS\" content=\"All\" />
+<meta name=\"revisit-after\" content=\"1 day\" />
+<meta name=\"ICBM\" content=\"45.52361, -122.675\" />
+<link rel=\"stylesheet\" type=\"text/css\" href=\"css/text.css\" />
+<link rel=\"stylesheet\" type=\"text/css\" href=\"css/layout.css\" />
+<link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"http://www.freemetropolis.com/portland/?q=blog/feed\" />
+<style type=\"text/css\">
+#dot-line-rt {
+	position:absolute; left:757px; top:4px; width:22px;  height:AUTO; background-image: url(http://localhost/~alex/freemet/images/dot-line-rt.gif);
+}
+#maincontent-container {
+	position:absolute;left:169px; top:114px; width:581px; height:AUTO; border-left: 6px solid #A2AE86; border-bottom: 1px solid #86B0D2; border-right: 1px solid #86B0D2; z-index:1; background:url(http://localhost/~alex/freemet/images/main_content_bkg.gif);
+}
+</style>
+<script type=\"text/JavaScript\" src=\"css/rollover.js\"></script>
+</head>
+<body  onload=\"MM_preloadImages(\'images/nav_search-over.gif\',\'images/nav_home-over.gif\',\'images/nav_places-over.gif\',\'images/nav_events-over.gif\',\'images/nav_people-over.gif\',\'images/nav_blog-over.gif\',\'images/nav_help-over.gif\')\">
+<div class=\"hide\">
+    <a href=\"#content\" title=\"Skip the site navigation to go directly to the content\">Skip to content</a> --- Welcome to Free Metropolis
+</div>
+<div id=\"layout-top\">
+	<img src=\"images/layout_top.gif\" width=\"801\" height=\"4\" alt=\"\" />
+</div>
+	<div id=\"freemetrop-title\">
+		<a href=\"http://localhost/~alex/freemet\"><img src=\"images/freemetrop_title.gif\" width=\"280\" height=\"34\" alt=\"\" /></a>
+	</div>
+	<div id=\"title-rt\">
+		<img src=\"images/title_rt.gif\" width=\"7\" height=\"78\" alt=\"\" />
+	</div>
+	<div id=\"banner-ad-area\" class=\"bodytext\"><!-- insert add--></div>
+	<div id=\"dot-line-rt\">
+		<img src=\"images/dot-line-rt.gif\" width=\"22\" height=\"596\" alt=\"\" />
+	</div>
+	<div id=\"layout-far-rt-bar\">
+		<img src=\"images/layout_far_rt_bar.gif\" width=\"22\" height=\"596\" alt=\"\" />
+	</div>
+	<div id=\"city-name\" class=\"city\">Portland
+	</div>
+	<div id=\"primary-nav-blk-line-top\">
+		<img src=\"images/primary_nav_blk_line_top.gif\" width=\"757\" height=\"1\" alt=\"\" />
+	</div>
+<form method=\"post\" action=\"?q=taxonomy/poge/and/0\">
+	<div id=\"search-box\" style=\"background-image: url(images/search_box.gif);\">
+		<input type=\"text\" id=\"keys\" name=\"keys\" value=\"\" size=\"18\" alt=\"\" />
+	</div>
+<div id=\"primary-nav\">
+		<input type=\"image\" src=\"images/nav_search.gif\" title=\"Search\" alt=\"Search\" name=\"search\" /><img src=\"images/primary_nav_spacer_lft.gif\" width=\"6\" height=\"31\" alt=\"\" /><a href=\"?q=\"><img id=\"hormenu1L1\" onmouseover=\"MM_swapImage(\'home\',\'\',\'images/nav_home-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"home\" height=\"31\" src=\"images/nav_home.gif\"  alt=\"\" /></a><a href=\"?q=place/bar\"><img id=\"hormenu1L2\" onmouseover=\"MM_swapImage(\'bars\',\'\',\'images/nav_places-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"bars\" height=\"31\" src=\"images/nav_places.gif\" alt=\"\" /></a><a href=\"?q=taxonomy/page/and/0/event\"><img id=\"hormenu1L110\" onmouseover=\"MM_swapImage(\'events\',\'\',\'images/nav_events-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"events\" height=\"31\" src=\"images/nav_events.gif\" alt=\"\" /></a><a href=\"?q=members\"><img id=\"hormenu1L58\" onmouseover=\"MM_swapImage(\'restaurants\',\'\',\'images/nav_people1-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"restaurants\" height=\"31\" src=\"images/nav_people1.gif\" alt=\"\" /></a><a href=\"?q=blog\"><img id=\"hormenu1L133\" onmouseover=\"MM_swapImage(\'forum\',\'\',\'images/nav_blog-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"forum\" height=\"31\" src=\"images/nav_blog.gif\"  alt=\"\" /></a><a href=\"?q=help\"><img id=\"hormenu1L134\" onmouseover=\"MM_swapImage(\'help\',\'\',\'images/nav_help-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"help\" height=\"31\" src=\"images/nav_help.gif\"  alt=\"\" /></a><img src=\"images/nav_blank.gif\" alt=\"\" width=\"181\" /><img src=\"images/primary_nav_rt.gif\" width=\"8\" height=\"31\" alt=\"\" />
+</div>
+</form>
+<!-- End Preload Script -->
+
+ 
+<div id=\"secondary-navigation\">
+	
+<form action=\"?q=user/login\" method=\"post\">
+<fieldset><input type=\"hidden\" name=\"edit[destination]\" value=\"user/login/1d23ddfdddddsddsddd\" />
+<div class=\"form-item\"><label for=\"name\">Username:</label><br /><input type=\"text\" maxlength=\"64\" class=\"form-text\" name=\"edit[name]\" id=\"name\" size=\"10\" value=\"\" /></div>
+<div class=\"form-item\"><label for=\"pass\">Password:</label><br /><input type=\"password\" class=\"form-password\" maxlength=\"64\" name=\"edit[pass]\" id=\"pass\" size=\"10\" value=\"\" /></div>
+<input type=\"submit\" class=\"form-submit\" name=\"op\" value=\"Log in\"  />
+</fieldset>
+</form>
+<div class=\"item-list\"><a href=\"?q=user/register\" title=\"Create a new user account.\">join freemetropolis</a><br /><br /><a href=\"?q=user/password\" title=\"Request new password via e-mail.\">forgotten  password?</a><br /></div>
+
+<div class=\"menu\">
+<ul>
+<div style=\"border:1px dashed #c0c79a;\"></div><li class=\"collapsed\"><a class=\"secondary-navigation\" href=\"?q=aggregator\">local news</a></li>
+
+</ul>
+</div>
+
+<br /><br />
+
+	<br />
+	<a href=\"?q=blog/feed\"><img src=\"images/icon_xml2.gif\" border=\"0\" alt=\"Syndicate this Site\" /></a>
+	<br />
+<!--WEBBOT bot=\"HTMLMarkup\" startspan ALT=\"Site Meter\" -->
+<script type=\"text/javascript\" language=\"JavaScript\">var site=\"sm7freemetropolis\"</script>
+<script type=\"text/javascript\" language=\"JavaScript1.2\" src=\"http://sm7.sitemeter.com/js/counter.js?site=sm7freemetropolis\">
+</script>
+<noscript>
+<a href=\"http://sm7.sitemeter.com/stats.asp?site=sm7freemetropolis\" target=\"_top\">
+<img border=\"0\" src=\"http://sm7.sitemeter.com/meter.asp?site=sm7freemetropolis\" alt=\"Site Meter\" /></a>
+</noscript>
+<!-- Copyright (c)2002 Site Meter -->
+<!--WEBBOT bot=\"HTMLMarkup\" Endspan -->
+</div>  
+<div id=\"maincontent-container\">
+<div id=\"holder\">
+ 
+<div id=\"main-content-bread\">
+<span class=\"trail\">
+<div class=\"breadcrumb\"><a href=\"?q=\">Home</a></div>
+<br />
+</span>
+</div>
+<a name=\"content\"></a>
+<img src=\"misc/dotline_long.jpg\"  alt=\"---------------------------------\" />
+ 
+ 
+
+<!-- begin content -->
+<form action=\"?q=user\" method=\"post\">
+<input type=\"hidden\" name=\"edit[destination]\" value=\"user/login/1d23ddfdddddsddsddd\" />
+<div class=\"form-item\"><label for=\"name\">Username:</label><br /><input type=\"text\" maxlength=\"64\" class=\"form-text\" name=\"edit[name]\" id=\"name\" size=\"30\" value=\"\" /><div class=\"description\">Enter your Portland Free Metropolis username.</div></div>
+<div class=\"form-item\"><label for=\"pass\">Password:</label><br /><input type=\"password\" class=\"form-password\" maxlength=\"64\" name=\"edit[pass]\" id=\"pass\" size=\"30\" value=\"\" /><div class=\"description\">Enter the password that accompanies your username.</div></div>
+<input type=\"submit\" class=\"form-submit\" name=\"op\" value=\"Log in\"  />
+<div class=\"item-list\"><a href=\"?q=user/password\">Request new password</a><br /><a href=\"?q=user/register\">Create new account</a><br /></div>
+</form>
+
+<!-- end content -->
+
+</div>
+</div>
+</body>
+</html>
+<!-- main -->
+ 
+ 
+', created = 1107362833, expire = 1, headers = '' WHERE cid = '/~alex/freemet/?q=user/login/1d23ddfdddddsddsddd' from: /~alex/freemet/index.php
+0.0023689270019531 seconds INSERT INTO cache (cid, data, created, expire, headers) VALUES('/~alex/freemet/?q=user/login/1d23ddfdddddsddsddd', '<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">
+<head>
+<title>Log in | Portland Free Metropolis</title>
+<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />
+<base href=\"http://localhost/~alex/freemet/\" />
+<style type=\"text/css\" media=\"all\">
+@import url(misc/drupal.css);
+</style>
+<style type=\"text/css\">@import url(modules/rsvp/rsvp.css);</style>
+
+<meta name=\"description\" content=\"\" />
+<meta name=\"keywords\" content=\"portland, hawthorne, belmont, music, punk, blog, diary, events, listings, citysearch\" />
+<meta name=\"rating\" content=\"General\" />
+<meta name=\"ROBOTS\" content=\"All\" />
+<meta name=\"revisit-after\" content=\"1 day\" />
+<meta name=\"ICBM\" content=\"45.52361, -122.675\" />
+<link rel=\"stylesheet\" type=\"text/css\" href=\"css/text.css\" />
+<link rel=\"stylesheet\" type=\"text/css\" href=\"css/layout.css\" />
+<link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"http://www.freemetropolis.com/portland/?q=blog/feed\" />
+<style type=\"text/css\">
+#dot-line-rt {
+	position:absolute; left:757px; top:4px; width:22px;  height:AUTO; background-image: url(http://localhost/~alex/freemet/images/dot-line-rt.gif);
+}
+#maincontent-container {
+	position:absolute;left:169px; top:114px; width:581px; height:AUTO; border-left: 6px solid #A2AE86; border-bottom: 1px solid #86B0D2; border-right: 1px solid #86B0D2; z-index:1; background:url(http://localhost/~alex/freemet/images/main_content_bkg.gif);
+}
+</style>
+<script type=\"text/JavaScript\" src=\"css/rollover.js\"></script>
+</head>
+<body  onload=\"MM_preloadImages(\'images/nav_search-over.gif\',\'images/nav_home-over.gif\',\'images/nav_places-over.gif\',\'images/nav_events-over.gif\',\'images/nav_people-over.gif\',\'images/nav_blog-over.gif\',\'images/nav_help-over.gif\')\">
+<div class=\"hide\">
+    <a href=\"#content\" title=\"Skip the site navigation to go directly to the content\">Skip to content</a> --- Welcome to Free Metropolis
+</div>
+<div id=\"layout-top\">
+	<img src=\"images/layout_top.gif\" width=\"801\" height=\"4\" alt=\"\" />
+</div>
+	<div id=\"freemetrop-title\">
+		<a href=\"http://localhost/~alex/freemet\"><img src=\"images/freemetrop_title.gif\" width=\"280\" height=\"34\" alt=\"\" /></a>
+	</div>
+	<div id=\"title-rt\">
+		<img src=\"images/title_rt.gif\" width=\"7\" height=\"78\" alt=\"\" />
+	</div>
+	<div id=\"banner-ad-area\" class=\"bodytext\"><!-- insert add--></div>
+	<div id=\"dot-line-rt\">
+		<img src=\"images/dot-line-rt.gif\" width=\"22\" height=\"596\" alt=\"\" />
+	</div>
+	<div id=\"layout-far-rt-bar\">
+		<img src=\"images/layout_far_rt_bar.gif\" width=\"22\" height=\"596\" alt=\"\" />
+	</div>
+	<div id=\"city-name\" class=\"city\">Portland
+	</div>
+	<div id=\"primary-nav-blk-line-top\">
+		<img src=\"images/primary_nav_blk_line_top.gif\" width=\"757\" height=\"1\" alt=\"\" />
+	</div>
+<form method=\"post\" action=\"?q=taxonomy/poge/and/0\">
+	<div id=\"search-box\" style=\"background-image: url(images/search_box.gif);\">
+		<input type=\"text\" id=\"keys\" name=\"keys\" value=\"\" size=\"18\" alt=\"\" />
+	</div>
+<div id=\"primary-nav\">
+		<input type=\"image\" src=\"images/nav_search.gif\" title=\"Search\" alt=\"Search\" name=\"search\" /><img src=\"images/primary_nav_spacer_lft.gif\" width=\"6\" height=\"31\" alt=\"\" /><a href=\"?q=\"><img id=\"hormenu1L1\" onmouseover=\"MM_swapImage(\'home\',\'\',\'images/nav_home-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"home\" height=\"31\" src=\"images/nav_home.gif\"  alt=\"\" /></a><a href=\"?q=place/bar\"><img id=\"hormenu1L2\" onmouseover=\"MM_swapImage(\'bars\',\'\',\'images/nav_places-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"bars\" height=\"31\" src=\"images/nav_places.gif\" alt=\"\" /></a><a href=\"?q=taxonomy/page/and/0/event\"><img id=\"hormenu1L110\" onmouseover=\"MM_swapImage(\'events\',\'\',\'images/nav_events-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"events\" height=\"31\" src=\"images/nav_events.gif\" alt=\"\" /></a><a href=\"?q=members\"><img id=\"hormenu1L58\" onmouseover=\"MM_swapImage(\'restaurants\',\'\',\'images/nav_people1-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"restaurants\" height=\"31\" src=\"images/nav_people1.gif\" alt=\"\" /></a><a href=\"?q=blog\"><img id=\"hormenu1L133\" onmouseover=\"MM_swapImage(\'forum\',\'\',\'images/nav_blog-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"forum\" height=\"31\" src=\"images/nav_blog.gif\"  alt=\"\" /></a><a href=\"?q=help\"><img id=\"hormenu1L134\" onmouseover=\"MM_swapImage(\'help\',\'\',\'images/nav_help-over.gif\',1);\" onmouseout=\"MM_swapImgRestore();\" name=\"help\" height=\"31\" src=\"images/nav_help.gif\"  alt=\"\" /></a><img src=\"images/nav_blank.gif\" alt=\"\" width=\"181\" /><img src=\"images/primary_nav_rt.gif\" width=\"8\" height=\"31\" alt=\"\" />
+</div>
+</form>
+<!-- End Preload Script -->
+
+ 
+<div id=\"secondary-navigation\">
+	
+<form action=\"?q=user/login\" method=\"post\">
+<fieldset><input type=\"hidden\" name=\"edit[destination]\" value=\"user/login/1d23ddfdddddsddsddd\" />
+<div class=\"form-item\"><label for=\"name\">Username:</label><br /><input type=\"text\" maxlength=\"64\" class=\"form-text\" name=\"edit[name]\" id=\"name\" size=\"10\" value=\"\" /></div>
+<div class=\"form-item\"><label for=\"pass\">Password:</label><br /><input type=\"password\" class=\"form-password\" maxlength=\"64\" name=\"edit[pass]\" id=\"pass\" size=\"10\" value=\"\" /></div>
+<input type=\"submit\" class=\"form-submit\" name=\"op\" value=\"Log in\"  />
+</fieldset>
+</form>
+<div class=\"item-list\"><a href=\"?q=user/register\" title=\"Create a new user account.\">join freemetropolis</a><br /><br /><a href=\"?q=user/password\" title=\"Request new password via e-mail.\">forgotten  password?</a><br /></div>
+
+<div class=\"menu\">
+<ul>
+<div style=\"border:1px dashed #c0c79a;\"></div><li class=\"collapsed\"><a class=\"secondary-navigation\" href=\"?q=aggregator\">local news</a></li>
+
+</ul>
+</div>
+
+<br /><br />
+
+	<br />
+	<a href=\"?q=blog/feed\"><img src=\"images/icon_xml2.gif\" border=\"0\" alt=\"Syndicate this Site\" /></a>
+	<br />
+<!--WEBBOT bot=\"HTMLMarkup\" startspan ALT=\"Site Meter\" -->
+<script type=\"text/javascript\" language=\"JavaScript\">var site=\"sm7freemetropolis\"</script>
+<script type=\"text/javascript\" language=\"JavaScript1.2\" src=\"http://sm7.sitemeter.com/js/counter.js?site=sm7freemetropolis\">
+</script>
+<noscript>
+<a href=\"http://sm7.sitemeter.com/stats.asp?site=sm7freemetropolis\" target=\"_top\">
+<img border=\"0\" src=\"http://sm7.sitemeter.com/meter.asp?site=sm7freemetropolis\" alt=\"Site Meter\" /></a>
+</noscript>
+<!-- Copyright (c)2002 Site Meter -->
+<!--WEBBOT bot=\"HTMLMarkup\" Endspan -->
+</div>  
+<div id=\"maincontent-container\">
+<div id=\"holder\">
+ 
+<div id=\"main-content-bread\">
+<span class=\"trail\">
+<div class=\"breadcrumb\"><a href=\"?q=\">Home</a></div>
+<br />
+</span>
+</div>
+<a name=\"content\"></a>
+<img src=\"misc/dotline_long.jpg\"  alt=\"---------------------------------\" />
+ 
+ 
+
+<!-- begin content -->
+<form action=\"?q=user\" method=\"post\">
+<input type=\"hidden\" name=\"edit[destination]\" value=\"user/login/1d23ddfdddddsddsddd\" />
+<div class=\"form-item\"><label for=\"name\">Username:</label><br /><input type=\"text\" maxlength=\"64\" class=\"form-text\" name=\"edit[name]\" id=\"name\" size=\"30\" value=\"\" /><div class=\"description\">Enter your Portland Free Metropolis username.</div></div>
+<div class=\"form-item\"><label for=\"pass\">Password:</label><br /><input type=\"password\" class=\"form-password\" maxlength=\"64\" name=\"edit[pass]\" id=\"pass\" size=\"30\" value=\"\" /><div class=\"description\">Enter the password that accompanies your username.</div></div>
+<input type=\"submit\" class=\"form-submit\" name=\"op\" value=\"Log in\"  />
+<div class=\"item-list\"><a href=\"?q=user/password\">Request new password</a><br /><a href=\"?q=user/register\">Create new account</a><br /></div>
+</form>
+
+<!-- end content -->
+
+</div>
+</div>
+</body>
+</html>
+<!-- main -->
+ 
+ 
+', 1107362833, 1, '') from: /~alex/freemet/index.php
+0.00098705291748047 seconds INSERT INTO accesslog (url, hostname, uid, timestamp) values('', '127.0.0.1', 0, 1107362833) from: /~alex/freemet/index.php

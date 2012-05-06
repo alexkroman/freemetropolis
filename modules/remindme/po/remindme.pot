@@ -1,0 +1,92 @@
+# LANGUAGE translation of PROJECT
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: remindme.module $Id: remindme.pot,v 1.1 2004/03/27 08:45:09 killes Exp $\n"
+"POT-Creation-Date: 2004-03-27 06:48+0100\n"
+"PO-Revision-Date: YYYY-mm-DD HH:MM+ZZZZ\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: remindme.module:7
+msgid "A module to remind users of upcoming events."
+msgstr ""
+
+#: remindme.module:21;26
+msgid "remind me!"
+msgstr ""
+
+#: remindme.module:21
+msgid "Remind me of this event"
+msgstr ""
+
+#: remindme.module:46;66
+msgid "Remind me"
+msgstr ""
+
+#: remindme.module:53
+msgid "You will be reminded at the selected times."
+msgstr ""
+
+#: remindme.module:64
+msgid "Remind me about this event"
+msgstr ""
+
+#: remindme.module:64
+msgid "Remind me via email at the selected times bevor start about this event."
+msgstr ""
+
+#: remindme.module:72;127
+msgid "Save settings"
+msgstr ""
+
+#: remindme.module:111
+msgid "Settings saved"
+msgstr ""
+
+#: remindme.module:122
+msgid "Select the terms for which you whish to receive reminders via email."
+msgstr ""
+
+#: remindme.module:126
+msgid "Send reminders"
+msgstr ""
+
+#: remindme.module:126
+msgid "How long before the event should the reminder(s) be sent?"
+msgstr ""
+
+#: remindme.module:129
+msgid "Reminders"
+msgstr ""
+
+#: remindme.module:174
+msgid "Reminder for »%title«"
+msgstr ""
+
+#: remindme.module:176
+msgid "Greetings %name,\n\nYou wanted to get a reminder for the event %title. It starts at %time, you can see more details at %url , the body is appended below."
+msgstr ""
+
+#: remindme.module:190
+msgid "Disabled"
+msgstr ""
+
+#: remindme.module:14
+msgid "set reminders"
+msgstr ""
+
+#: remindme.module:14
+msgid "administer remindme"
+msgstr ""
+
+#: remindme.module:0
+msgid "remindme"
+msgstr ""
+

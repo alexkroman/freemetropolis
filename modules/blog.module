@@ -1,0 +1,385 @@
+<?php
+// $Id: blog.module,v 1.8 2004/10/25 03:11:04 alex Exp $
+
+function blog_settings() {
+  $output = form_textarea(t("Explanation or submission guidelines"), "blog_help", variable_get("blog_help", ""), 70, 4, t("This text is displayed at the top of the blog submission form.  It's useful for helping or instructing your users."));
+  $output .= form_select(t("Minimum number of words in a blog entry"), "minimum_blog_size", variable_get("minimum_blog_size", 0), drupal_map_assoc(array(0, 10, 25, 50, 75, 100, 125, 150, 175, 200)), t("The minimum number of words a personal blog entry should contain.  This is useful to rule out submissions that do not meet the site's standards, such as short test posts."));
+  return $output;
+}
+
+function blog_node_name($node) {
+  return t("personal blog entry");
+}
+
+function blog_perm() {
+  return array("edit own blog");
+}
+
+function blog_access($op, $node) {
+  global $user;
+
+  if ($op == "view") {
+    return $node->status;
+  }
+
+  if ($op == "create") {
+    return user_access("edit own blog") && $user->uid;
+  }
+
+  if ($op == "update") {
+	  return user_access("edit own blog") && ($user->uid == $node->uid);
+  }
+
+  if ($op == "delete") {
+    return user_access("edit own blog") && ($user->uid == $node->uid);
+  }
+
+}
+
+function blog_user($type, &$edit, &$user) {
+  switch ($type) {
+    case "view_public":
+    case "view_private":
+      if (user_access("edit own blog", $user)) {
+        return form_item(t("Blog"), l(t("view recent blogs"), "blog/$user->uid", array("title" => t("Read %username's latest posts.", array("%username" => $user->name)))));
+      }
+  }
+}
+
+
+function blog_insert($node) {
+//	$node->image = file_save_upload('image');
+	$shadow_nid = arg(3);
+
+	db_query("INSERT INTO {shadowlog} (nid, shadow_nid, recommended, rating,public, start, image) VALUES (%d,%d,%d,%d,%d,%d,'%s')",$node->nid, $shadow_nid,$node->recommended, $node->rating,1,$node->start,$node->image);
+	if (!empty($node->rating)) {
+		$score = db_fetch_object(db_query("SELECT AVG(rating) as score, count(*) as count FROM {shadowlog} WHERE shadow_nid = %d",$shadow_nid));
+		db_query ("UPDATE {place} SET score = %d, votes = %d WHERE nid = %d", $score->score, $score->count, $shadow_nid);
+	}
+	header("Location: ?q=node/view/$shadow_nid");
+}
+
+function blog_update($node) {
+	db_query("UPDATE {shadowlog} SET recommended = %d, rating = %d, public = %d WHERE nid = %d",$node->recommended, $node->rating,1, $node->nid);
+	if (!empty($node->rating)) {
+		$score = db_fetch_object(db_query("SELECT AVG(rating) as score, count(*) as count FROM {shadowlog} WHERE shadow_nid = %d",$shadow_nid));
+		db_query ("UPDATE {place} SET score = %d, votes = %d WHERE nid = %d", $score->score, $score->count, $shadow_nid);
+	}
+}
+
+function blog_load(&$node) {
+	$place = db_fetch_object(db_query("SELECT * from {shadowlog} WHERE nid = %d", $node->nid));
+	return $place;
+}
+
+function blog_help($section) {
+  $output ="";
+
+  switch ($section) {
+    case 'admin/help#blog':
+      $output .= t("
+      <p>Drupal's blog module allows registered users to maintain an online weblog (commonly known as a blog), often referred to as an online journal or diary.  These can be filled with daily thoughts, poetry, boneless blabber, spiritual theories, intimate details, valuable experiences, cynical rants, semi-coherent comments, writing experiments, artistic babblings, critics on current facts, fresh insights, diverse dreams, chronicles and mumbling madness available for public consumption.</p>
+      <p>Blogs are made up of individual entries (nodes) that are timestamped and are typically viewed by day as you would a diary.  Blogs often contain links to things you've seen and/or agree/disagree with.  A typical example of a long term blog can be seen at %scripting-com.</p>
+      <p>The blog module adds a \"user blogs\" navigation link to the site, which takes any visitor to a page that displays the most recent blog entries from all the users on the site. Personal user menus gain a \"create a blog entry\" link (which takes you to a submission form) and a \"view personal blog\" link (which displays your blog entries as other people will see them).  On the bottom of each of your own blog entries, there is an \"edit this blog entry\" link that lets you edit or delete that entry.</p>
+      <p>If a user has the ability to post blogs, then the import module (news aggregator) will display a blog-it link <strong>(b)</strong> next to each news item in its lists.  Click on this and you will be taken to the blog submission form, with the title, a link to the item, and a link to the source into the body text already in the text box, ready for you to add your explanation.  This actively encourages people to add blog entries about things they see and hear elsewhere in the Drupal site and from your syndicated partner sites.</p>", array("%scripting-com" => "<a href=\"http://www.scripting.com/\">http://www.scripting.com/</a>"));
+      break;
+    case 'admin/system/modules#description':
+      $output .= t("Enables keeping a blog or easily and regularly updated web page.");
+      break;
+    case 'admin/system/modules/blog':
+      $output .= t("A weblog is a running journal of a user's ideas.  Enter the minimum word count for a single entry, and the text displayed on the entry submission form");
+      break;
+    case 'node/add/blog':
+      $output = variable_get('blog_help', '');
+      break;
+    case 'node/add#blog':
+		$output = t("A blog is a regularly updated journal made up of individual entries, often called posts, that are time stamped and typically arranged by the day, with the newest on top (a diary is the reverse).  They tend to be quite personal, often containing links to things you've seen, or to editorials that you find interesting.   Some blogs also contain original material written solely for the blog.  Since a Blog is personal, you and only you have full control over what you publish.  The most interesting blog entries or those blog entries that fit the site's topic well might get promoted to the front page by the community or by users with the access do this.");
+      break;
+  }
+
+  return $output;
+}
+
+function blog_feed_user($uid = 0) {
+  global $user;
+
+  if ($uid) {
+    $account = user_load(array("uid" => $uid, "status" => 1));
+  }
+  else {
+    $account = $user;
+  }
+
+  $result = db_query_range("SELECT n.nid, n.title, n.teaser, n.created, u.name, u.uid FROM {node} n INNER JOIN {users} u ON n.uid = u.uid WHERE n.type = 'blog' AND u.uid = %d AND n.status = 1 ORDER BY n.nid DESC", $uid, 0, 15);
+  $channel["title"] = $account->name ."'s blog";
+  $channel["link"] = url("blog/view/$uid", NULL, NULL, TRUE);
+  $channel["description"] = $term->description;
+  node_feed($result, $channel);
+}
+
+function blog_feed_last() {
+  $result = db_query_range("SELECT n.nid, n.title, n.teaser, n.created, u.name, u.uid FROM {node} n INNER JOIN {users} u ON n.uid = u.uid WHERE n.type = 'blog' AND n.status = 1 ORDER BY n.nid DESC", 0, 15);
+  $channel["title"] = variable_get("site_name", "drupal") ." blog";
+  $channel["link"] = url("blog");
+  $channel["description"] = $term->description;
+  node_feed($result, $channel);
+}
+
+function blog_page_user($uid) {
+  $account = user_load(array((is_numeric($uid) ? "uid" : "name") => $uid, "status" => 1));
+
+  $title = t("%name's blog", array("%name" => $account->name));
+  $output = "";
+
+  $result = pager_query("SELECT node.nid FROM {node} INNER JOIN {shadowlog} s ON s.nid = node.nid WHERE type = 'blog' AND uid = '$account->uid' AND status = 1 ORDER BY node.nid DESC ", variable_get("default_nodes_main", 10));
+  while ($node = db_fetch_object($result)) {
+    $output .= blog_view(node_load(array("nid" => $node->nid)), 1);
+  }
+  $breadcrumbs[] = l('home','');
+  $breadcrumbs[] = l('blogs','blog');
+  $breadcrumbs[] = l($account->name,"user/view/$account_uid");
+  drupal_set_breadcrumb($breadcrumbs);
+  
+  $output .= theme('pager', NULL, variable_get("default_nodes_main", 10));
+  $output .= theme('xml_icon', url("blog/feed/$account->uid"));
+
+  drupal_set_html_head('<link rel="alternate" type="application/rss+xml" title="RSS - '. $title .'" href="'. url("blog/feed/$account->uid") .'" />');
+  print theme("page", $output, $title);
+}
+
+function blog_page_last() {
+	global $user;
+	$cache = cache_get("recent-blogs:" . request_uri());
+	if (!empty($cache)) {
+		print theme("page",$cache->data);
+		return true;
+	}
+  $output = "";
+
+  $result = pager_query("SELECT nid FROM {node} WHERE type = 'blog' AND status = 1 ORDER BY nid DESC", variable_get("default_nodes_main", 10));
+
+  while ($node = db_fetch_object($result)) {
+    $output .= blog_view(node_load(array("nid" => $node->nid)), 1);
+  }
+  $output .= theme('pager', NULL, variable_get("default_nodes_main", 10));
+  $output .= theme('xml_icon', url('blog/feed'));
+
+  $breadcrumbs[] = l('Home','');
+  $breadcrumbs[] = l('Recent Blog Postings',request_uri());
+  
+  
+  drupal_set_breadcrumb($breadcrumbs);
+  
+  drupal_set_html_head('<link rel="alternate" type="application/rss+xml" title="RSS - blogs" href="'. url('blog/feed') .'" />');
+  cache_set("recent-blogs",$output,1);
+  print theme("page", $output);
+}
+
+function blog_validate(&$node) {
+
+  /*
+  ** Validate the size of the blog:
+  */
+	$node->start = _event_mktime($hour, $node->minute, 0, $node->month, $node->day, $node->year);
+    if (variable_get('event_timezone', '1')) {
+		$node->start -= $GLOBALS['user']->timezone;
+    }
+	
+  if (isset($node->body) && count(explode(" ", $node->body)) < variable_get("minimum_blog_size", 0)) {
+    $error["body"] = theme("error", t("The body of your blog is too short."));
+  }
+
+  return $error;
+}
+
+function blog_form(&$node, &$error) {
+  global $nid;
+  $iid = $_GET["iid"];
+
+ 
+ 	  $place->nid = arg(3);
+	  if (empty($place->nid) ) {
+		  $place->nid = $node->shadow_nid;
+	  }
+		  
+	  if  (!empty($place->nid)) {
+		  $place = node_load($place);
+	  }
+
+	  $output .= "<img src=\"misc/dotline_long.jpg\" alt=\"---\" />";
+	  $output .= "You are writing about: <strong>" . $place->title . "</strong><br />";
+	  
+//$output .= "<br />Recommend this place? <input type=\"radio\" name=\"edit[recommended]\" value=\"1\" " . (($node->recommended) ? "checked" : "") . "> Yes <input type=\"radio\" name=\"edit[recommended]\" value=\"0\" " . ((!$node->recommended) ? "checked" : "")  . "> No";
+
+	
+	  //$output .= form_file(t('File attachment'), 'image', 40, ($node->file || $node->file_path ? t('A file already exists, if you upload another file the current file will be replaced.') : t('Optionally attach a file, for example a patch or a screenshot.')) . theme('error', $error['file_issue']));
+	  //  $output .= form_select(t('rate this place'), 'rating', $node->rating, array('1' => t('1 - worst'), '2' => t('2'), '3' => '3 - Average', '4' => '4', '5' => '5 - Best'), '');
+	  	  
+  if (function_exists("taxonomy_node_form")) {
+    $output .= implode("", taxonomy_node_form("blog", $node));
+  }
+//  $output .= form_item(t('Start'), event_form_date($event->start), t('When are you going?'));
+  $output .= form_textarea(t("Body"), "body", $node->body, 60, 15, $error["body"] ? $error["body"] : filter_tips_short());
+
+  return $output;
+}
+
+function blog_page() {
+
+  switch (arg(1)) {
+    case "feed":
+      if (arg(2)) {
+        blog_feed_user(arg(2));
+      }
+      else {
+        blog_feed_last();
+      }
+      break;
+    default:
+      if (arg(1)) {
+        blog_page_user(arg(1));
+      }
+      else {
+        blog_page_last();
+      }
+  }
+}
+
+function blog_content($node, $main = 0, $location = 1) {
+	$result = db_query("select * from {shadowlog} INNER JOIN {node} on shadowlog.shadow_nid = node.nid INNER JOIN {place} ON node.nid = place.nid WHERE node.nid = %d",$node->shadow_nid);
+	$node->body = check_output($place . "<br />" . $node->body);
+	return $node;
+}
+
+function blog_view($node, $main = 0, $page = 0, $location = 1) {
+  if ($page) {
+    // Breadcrumb navigation
+    $breadcrumb[] = l(t("Home"), "");
+    $breadcrumb[] = l(t("Blog"), "blog");
+    $breadcrumb[] = l(t("%name's blog", array("%name" => $node->name)), "blog/$node->uid");
+    // set the breadcrumb
+    drupal_set_breadcrumb($breadcrumb);
+  }
+  // prepare the node content
+  //$node = blog_content($node, $main, $location);
+   
+  // print the node
+  return theme("shadowlog", $node, $main, $page, $location);
+}
+
+function theme_shadowlog($node, $main = 0, $page = 0, $location = 0) {
+	if ($main == 0 || arg(0) == 'blog' || arg(0) == 'friendlist' || (arg(0) == 'node' && arg(1) != 'view' && arg(1) != 'edit' && arg(1) != 'add')) {
+		$show_place = true;
+	}
+	$result = db_query("select * from {shadowlog} INNER JOIN {node} on shadowlog.shadow_nid = node.nid INNER JOIN {place} ON node.nid = place.nid WHERE shadowlog.shadow_nid = %d LIMIT 1",$node->shadow_nid);
+
+	if (!db_num_rows($result)) {
+		$result = db_query("select * from {shadowlog} INNER JOIN {node} on shadowlog.shadow_nid = node.nid INNER JOIN {event} ON node.nid = event.nid WHERE shadowlog.shadow_nid = %d LIMIT 1",$node->shadow_nid);			
+	}
+	
+	$event_place = db_fetch_object($result);
+	if ($event_place->type == 'event') {
+		/**
+		 * grab the location.
+		 */
+		$event_place->location_nid = $event_place->location_nid;
+		$event_place->start = $event_place->start;
+	}
+	
+	if ($show_place) {
+		$place .= place_view($event_place,0,0,$node->nid);
+	}
+
+	$node->body = check_output($node->body);
+	$output .= $place;
+ 	//$output .= "<br /><h1><strong>" . $node->title .
+ 	//"</strong></h1>";
+
+	$post_user = user_load(array('uid' => $node->uid));
+
+	$output .= "<br /><br /><table><tr><td width=\"120\" class=\"blog\">";
+	
+	$output .= "<a href=\"?q=blog/$post_user->uid\">";
+	if ($post_user->profile_avatar) {
+		$output .= '<img src="' . $post_user->profile_avatar . '" alt="avatar" border="0" /><br />';
+	}
+	else {
+		$output .= '<img src="images/no_image.gif" alt="no image" border="0" />';
+	}
+	$output .= "</a>";
+	
+	$output .= "</td><td class=\"blog\">";
+	
+ 	
+	
+	$output .= "by " . format_name($node) . " on " . format_date($node->created) . "<br />";	
+	
+	if (arg(2) != $node->shadow_nid) {
+		$number = db_num_rows(get_journals($node->shadow_nid));
+		$number--;
+		$output .= l("view all of $node->title","node/view/$node->shadow_nid") . ", (there " . (($number == 1) ? 'is' : 'are') ." $number more) <br/><br />";
+	}
+	
+	$output .= "</td></tr></table>";
+	
+	$output .=  "<br />" . $node->body . "<br /><br />";
+	
+	if ($links = link_node($node, $main)) {
+		$output .= "<div align=\"right\">" . theme('links', $links) ."</div>";
+	}
+
+	$output .= "<img src=\"misc/dotline_long.jpg\" alt=\"--\" /><br />";
+	
+
+	return $output;
+}
+
+
+function blog_link($type, $node = 0, $main) {
+  global $user;
+
+  $links = array();
+
+  if ($type == "system") {
+    if (user_access("edit own blog")) {
+		menu("node/add/blog", t("blog"), "node_page", 0,1);
+		menu("blog/". $user->uid, t("my blog"), "blog_page",  1);
+    }
+    if (user_access("access content")) {
+      menu("blog", t("blogs"), "blog_page", 0, MENU_HIDE);
+    }
+  }
+
+  if ($type == "page" && user_access("access content")) {
+    $links[] = l(t("blogs"), "blog", array("title" => t("Read the latest blogs.")));
+  }
+
+  if ($type == "node" && $node->type == "blog") {
+    if (blog_access("update", $node)) {
+		$links[] = l(t("edit this blog"), "node/edit/$node->nid", array("title" => t("Edit this blog.")));
+    }
+	$links[] = l(t("%username's blog", array("%username" => $node->name)), "blog/$node->uid", array("title" => t("Read %username's latest blog entries.", array("%username" => $node->name))));
+  }
+
+  return $links;
+}
+
+function blog_block($op = "list", $delta = 0) {
+  global $user;
+  if ($op == "list") {
+    $block[0]["info"] = t("Blogs");
+    return $block;
+  }
+  else {
+    if (user_access("access content")) {
+      $block["content"] = node_title_list(db_query_range("SELECT n.title, n.nid FROM {node} n WHERE n.type = 'blog' AND n.status = 1 ORDER BY n.nid DESC", 0, 10));
+      $block["content"] .= "<div class=\"more-link\">". l(t("more"), "blog", array("title" => t("Read the latest blog entries."))) ."</div>";
+      $block["subject"] = t("Blogs");
+    }
+    return $block;
+  }
+}
+
+
+
+?>

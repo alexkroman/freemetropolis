@@ -1,0 +1,478 @@
+<?php
+  // $Id: friendlist.module,v 1.8 2004/10/25 03:11:04 alex Exp $
+
+  function friendlist_system($field) {
+    $system["description"] = t("Enable Friend List functionality");
+    return $system[$field];
+  }
+
+  function friendlist_perm() {
+    return array("maintain friend list");
+  }
+
+  function friendlist_user($type, &$edit, &$thisuser) {
+    global $user;
+
+    if (!isset($user->uid)) {
+      return null;
+    }
+
+    if (!isset($_SESSION['friendlist'])) {
+      friendlist_update_session();
+    }
+
+    if (isset($thisuser->uid) and $type == "view_public") {
+      if (user_access("maintain friend list")) {
+        // don't let just any user manage friends
+        if (in_array($thisuser->uid, $_SESSION['friendlist'])) {
+          $output .= form_item(t("Friend List"), l(t("Remove from Friend List"), "friendlist/delete/" . $thisuser->uid));
+        }
+        else {
+          $output .= form_item(t("Friend List"), l(t("Add to Friend List"), "friendlist/add/" . $thisuser->uid));
+        }
+      }
+
+      // look up this user's friends
+      $friends = friendlist_list_friends($thisuser->uid, 0, 1);
+      $output .= form_item(l("friends","friendlist/$thisuser->uid"), $friends, "");
+
+      // look up users who consider this user a friend
+      $friend_of = friendlist_list_friends_of($thisuser->uid, 1);
+      $output .= form_item(t("Friend Of"), $friend_of, "");
+    }
+    return $output;
+  }
+
+  function friendlist_update_session() {
+    global $user;
+    @session_start();
+
+    $_SESSION['friendlist'] = array();
+    if (isset($user->uid)) {
+      $result = db_query("SELECT friend FROM friendlist WHERE uid=%d ORDER BY timestamp DESC",$user->uid);
+      while ($friend = db_fetch_object($result)) {
+        $_SESSION['friendlist'][] = $friend->friend;
+      }
+    }  
+  }
+
+  function friendlist_block($op = "list", $delta = 0) {
+    global $user;
+    if ($op == "list") {
+    
+      $block[0]["info"] = t("Friend List");
+      $block[1]["info"] = t("Friend Blogs");
+      return $block;
+      
+    } 
+    elseif ($op == 'view' and user_access("access content")) {
+    
+      if (isset($user->uid)) {
+        switch ($delta) {
+          case 0 :
+            $result = db_query("SELECT b.friend as uid, u.name FROM friendlist b, users u WHERE b.uid=%d AND u.uid=b.friend ORDER BY b.timestamp DESC",$user->uid);
+            while ($account = db_fetch_object($result)) {
+              $account->link = l((strlen($account->name) > 15 ? substr($account->name, 0, 15) . '...' : $account->name), "user/view/$account->uid");
+              /*
+              ** To Enable the added functionality , which requires the extended theme_user_list patch, uncomment the following
+              ** line and comment the line after it. 
+              */
+              //$users[] = $account; 
+              $users[] = $account->link;
+            }
+
+            $block["content"] = theme("user_list",$users);
+            $block["subject"] = t("Friend List");
+            return $block;
+            break;
+
+          case 1:
+            $block["content"] = node_title_list(db_query("SELECT distinct n.nid, u.uid, u.name, n.created, n.title FROM friendlist b, node n LEFT JOIN users u ON n.uid = u.uid WHERE n.type = 'blog' AND n.status = 1 AND n.uid=b.friend AND b.uid=%d ORDER BY n.nid DESC LIMIT 10",$user->uid));
+            if (!sizeof($block["content"])) {
+              return NULL;
+            } 
+            $block["subject"] = t("My Friends' Blogs");
+            return $block;
+            break;
+        } 
+      } 
+    }
+  }
+
+  function friendlist_icon_link($id) {
+    global $user;
+
+    if (!isset($user->uid)) {
+      return null;
+    }
+
+    if (!isset($_SESSION['friendlist'])) {
+      friendlist_update_session();
+    }
+
+    if (in_array($id,$_SESSION['friendlist'])) {
+      return friendlist_del_link($id);
+    } 
+    else {
+      return friendlist_add_link($id);
+    }
+  }
+
+  function friendlist_add_link($id) {
+    global $theme;
+    $icon = isset($theme->add_icon) ? $theme->add_icon : "[+]";
+    return l($icon,"friendlist/add/$id");
+  }
+  
+  function friendlist_del_link($id) {
+    global $theme;
+    $icon = isset($theme->del_icon) ? $theme->del_icon : "[-]";
+    return l($icon,"friendlist/delete/$id");
+  }
+
+  function friendlist_link($type, $node = 0, $main) {
+    global $user;
+  
+    if ($type == "system") {
+      if (user_access("maintain friend list")) {
+		  menu("friendlist", t("friends blog"), "friendlist_page", 0, MENU_SHOW);
+        menu("friendlist/list", t("edit friends"), "friendlist_page", 1, MENU_SHOW);
+        menu("friendlist/feed/$user->uid", t(" >> syndicate"), "friendlist_page", 2, MENU_HIDE);
+        menu("friendlist/feed", t(" >> xml feed"), "friendlist_page", 0, MENU_HIDE);
+        menu("friendlist/add", t("add to friendlist"), "friendlist_page", 0, MENU_HIDE);
+        menu("friendlist/save", t("user added to friendlist"), "friendlist_page", 0, MENU_HIDE);
+        menu("friendlist/delete", t("delete friendlist"), "friendlist_page", 0, MENU_HIDE);
+        menu("friendlist/remove", t("user removed from friendlist"), "friendlist_page", 0, MENU_HIDE);
+        menu("friendlist/view", t("view friendlist"), "friendlist_page", 0, MENU_HIDE);
+      }
+      else {
+        // non-authorized users must specify a uid as part of the URL.  This should still accommodate.
+        menu("friendlist/feed", t("xml feed"), "friendlist_page", 0, MENU_HIDE);
+      }
+    }
+  }
+
+  function friendlist_page() {
+    global $user;
+
+    $edit = $_POST["edit"];
+    $op = $_POST["op"];
+    if (empty($op)) {
+      $op = arg(1);
+    }
+    
+    if($op == 'feed') {
+      // arg(2) is optional uid
+      friendlist_feed(arg(2));
+      return;
+    }
+
+		$breadcrumb[] = l("home","");
+		$breadcrumb[] = l("friends","friendlist");
+		
+
+    switch ($op) {
+      case 'add' : 
+		  $breadcrumb[] = l("add", "");
+		  
+        $title = t("Confirm Addition to Friend List?");
+        $output = friendlist_addfriend_form(arg(2));
+        break;
+      case "Add User" :
+      case "save" :
+        $output = friendlist_add($edit['friend_id']);
+        break;
+
+      case 'delete' : 
+        $title = t("Confirm Removal from Friend List?");
+        $output = friendlist_deletefriend_form(arg(2));
+        break;
+      
+      case 'list' : 
+		  $breadcrumb[] = "Your Friend List";
+		  
+        $title = t("your friend list");
+        $output = friendlist_list_friends();
+		$output .= "<br />";
+		$output .= "Click " . l("here","members") . " to add more friends";
+		
+        break;
+      
+      case "Remove User" :
+      case "remove" :
+        $output = friendlist_remove($edit['friend_id']);
+        break;
+
+      case "view" :
+      default :
+		  if(arg(1)) {
+		
+			
+			$acct = user_load(array('uid' => arg(1)));
+          if(is_object($acct)) {
+            $title = t("$acct->name's Friends");
+			$breadcrumb[] = "$acct->name's friends";
+			  $output = friendlist_list_content($acct);
+          }
+          else {
+            $title = t("Unknown User");
+            $output = t("Please check the URL that you entered.  The specified user was not found.");
+          }
+        }
+        else {
+			$title = t("My Friends");
+			$breadcrumb[] = l("your friends",'friendlist');
+			
+		
+		  
+		  $output = friendlist_list_content();
+        }
+        break;
+    }
+	drupal_set_breadcrumb($breadcrumb);
+    print theme("page", $output, $title);
+  }
+
+  function friendlist_addfriend_form($uid) {
+    global $user;
+    friendlist_update_session();
+    $friend = user_load(array('uid' => $uid));
+    
+    if (empty($friend->name)) {
+      return t("This user does not exist");
+    }
+    elseif (in_array($uid, $_SESSION['friendlist'])) {
+      return t("This user is already on your friend list");
+    }
+    elseif ($user->uid == $uid) {
+      return t("Cannot add yourself to friend list");
+    }
+    else {
+      $form  = t("Add User <b>'") . l($friend->name,"user/" . $uid) . t("'</b> to Friend List?<br /><br />");
+      $form .= form_hidden("friend_id", $uid);
+      $form .= form_submit(t("Add User"));  
+      return form($form,"post",url("friendlist/save"));
+    }
+  }
+  
+  function friendlist_deletefriend_form($uid) {
+    global $user;
+    friendlist_update_session();
+    $friend = user_load(array('uid' => $uid));
+    
+    if (empty($friend->name)) {
+      return "This user does not exist";
+    }
+    elseif (!in_array($uid, $_SESSION['friendlist'])) {
+      return t("This user is not on your friend list");
+    }
+    else {
+      $form  = t("Remove User <b>'") . l($friend->name,"user/" . $uid) . t("'</b> from Friend List?<br /><br />");
+      $form .= form_hidden("friend_id", $uid);
+      $form .= form_submit(t("Remove User"));  
+      return form($form,"post",url("friendlist/remove"));
+    }
+  }
+
+  function friendlist_add($id) {
+    global $user;
+    db_query("INSERT INTO friendlist (uid,friend,timestamp) VALUES (%d,%d,%d)" , $user->uid , $id , time());
+    friendlist_update_session();
+  }
+  
+  function friendlist_remove($id) {
+    global $user;
+    db_query("DELETE FROM friendlist where uid=%d and friend=%d" , $user->uid , $id);
+    friendlist_update_session();
+  }
+
+  // prints out an xml feed of all of a given users' friends' blog entries
+  function friendlist_feed($uid=0) {
+    global $user;
+  
+    if(!$uid) {
+      $acct = $user;
+      $use_sess = true;
+    }
+    else {
+      $acct = user_load(array('uid' => $uid));
+      $use_sess = false;
+    }
+  
+    if($use_sess) {
+      
+      // perhaps your session expired, or you think you should have friends
+      if (!isset($_SESSION['friendlist']) || sizeof($_SESSION['friendlist']) == 0) {
+        friendlist_update_session();
+      }
+
+      // MySQL doesn't like empty $friends lists
+      if(sizeof($_SESSION['friendlist']) > 0) {
+        $friends = implode(',', $_SESSION['friendlist']);
+        $result = db_query_range("SELECT n.nid, n.title, n.teaser, n.created, u.name, u.uid     FROM {node} n INNER JOIN {users} u ON n.uid = u.uid WHERE n.type = 'blog' AND n.status   = 1 AND n.uid IN ($friends) ORDER BY n.nid DESC", 0, 30);
+      }
+      else {
+        $err_title = t("No friends found for you.  Please verify that you are logged in and have friends.");
+      }
+    }
+    elseif(is_object($acct)) {
+      $result = db_query_range("SELECT distinct n.nid, n.title, n.teaser, n.created, u.name, u.uid FROM friendlist b, node n LEFT JOIN users u ON n.uid = u.uid WHERE n.type = 'blog' AND n.status = 1 AND n.uid=b.friend AND b.uid=$acct->uid ORDER BY n.nid DESC", 0, 30);
+    }
+    else {
+      // user was not found
+      $err_title = t("User ($uid) not found, check url");
+    }
+  
+    if($err_title){
+      $channel["title"] = $err_title;
+    }
+    else {
+      $channel["title"] = t("%name's friends' blogs", array ('%name' => $acct->name));
+    }
+    $channel["link"] = url("friendlist/view/$acct->uid", null, null, 1); // use absolute urls
+    $channel["description"] = '';
+    node_feed($result, $channel);
+  }
+  
+  // Lists out all of a user's friends' content 
+  function friendlist_list_content($acct=null) {
+	  global $user, $base_url;
+    if(is_object($acct)) {
+		$uid = $acct->uid;
+    }
+    else {
+				
+		$uid = $user->uid;
+    }
+	
+	/**
+	 * Get overview
+	 */
+	if (isset($_POST['distinct'])) {
+		header("Location: $base_url/" . "?q=" . $_POST['distinct']);
+	}
+	
+
+	$overview = db_query("SELECT distinct s.shadow_nid FROM friendlist b, node n INNER JOIN shadowlog s ON n.nid = s.nid  WHERE  b.uid=$uid AND n.uid=b.friend ORDER BY n.nid DESC ");
+	$distinct_places = '<form method="post" action="' . request_uri() . '"><select name="distinct">';
+	while ($the_overview = db_fetch_object($overview)) {
+		$result = db_query("SELECT n.title, n.nid FROM node n WHERE nid = $the_overview->shadow_nid");
+		while ($distinct_place = db_fetch_object($result)) {
+			$title = $distinct_place->title;
+			if ($title = substr($title,0,20)) {
+				$title .= " ...";
+			}
+			
+			$distinct_places .= "<option value=\"node/view/$distinct_place->nid\">$title</option>";
+		}
+	}
+	$distinct_places .= '</select><input type="submit" value="view it!"></form>';
+		if (arg(1)) {
+			$output .= "<span class=\"heading3\">" . $acct->name . "'s friends are writing about: </span> <br />";
+		}
+		else {
+			$output .= "<span class=\"heading3\">your friends are writing about: </span> <br />";
+		}
+		
+		$output .=  $distinct_places;
+		
+		$output .= "<br /><br />";
+		$output .= "<img src=\"misc/dotline_long.jpg\" border=\"0\" />";		
+	
+	
+// 	$overview = db_query("SELECT distinct nid FROM friendlist b, place_recommend r WHERE  b.uid=$uid AND r.uid=b.friend LIMIT 20 ");
+// 	while ($the_overview = db_fetch_object($overview)) {
+// 		$result = db_query("SELECT n.title, n.nid FROM node n WHERE nid = $the_overview->nid");
+// 		while ($distinct_place = db_fetch_object($result)) {
+// 			$distinct_places_recommend[] = l($distinct_place->title, "node/view/$distinct_place->nid");
+// 		}
+// 	}
+
+
+// 	$invites .= rsvp_view_invites();
+	
+// 	if ($invites) {
+// 		$output .= "<span class=\"heading3\">your have been invited to:</span> <br />";
+// 		$output .= $invites;
+// 		$output .= "<br /><br />";
+// 		$output .= "<img src=\"misc/dotline_long.jpg\" border=\"0\" />";		
+// 	}
+
+// 	$manage .= rsvp_manage();
+	
+// 	if ($invites) {
+// 		$output .= "<span class=\"heading3\">you have recently sent these invitations:</span> <br />";
+// 		$output .= $manage;
+// 		$output .= "<br /><br />";
+// 		$output .= "<img src=\"misc/dotline_long.jpg\" border=\"0\" />";		
+// 	}
+
+    $result = pager_query("SELECT distinct n.nid, n.type, u.uid, u.name, n.created, n.title FROM friendlist b, node n LEFT JOIN users u ON n.uid = u.uid WHERE n.status = 1 AND n.type = 'blog' AND n.uid=b.friend AND b.uid=$uid ORDER BY n.nid DESC",variable_get('default_nodes_main', 10));
+    if (db_num_rows($result)) {
+      drupal_set_html_head('<link rel="alternate" type="application/rss+xml" title="RSS" href="'. url("friendlist/feed/$url") .'" />');
+  
+     
+      while ($node = db_fetch_object($result)) {
+        $output .= blog_view(node_load(array('nid' => $node->nid, 'type' => $node->type)), 1);
+      }
+      $output .= theme('pager', NULL, variable_get('default_nodes_main', 10));
+    }
+    else {
+		if (!arg(1)) {
+			$output = t("<p>None of your friends have posted any blog entries.</p><p>You can always " . l("add more friends","members") . ".</p>");
+		}
+		else {
+				$output = t("<p>This person hasn't posted any blog entries yet.</p>");
+		}
+	}
+  
+    return $output;
+  }
+  
+  // Lists all of a user's friends.  Optionally show links to remove and/or include count.
+  function friendlist_list_friends($uid=null, $show_remove_link=1, $show_count=0) {
+    global $user;
+    if(!$uid && $user->uid > 0) {
+      $uid = $user->uid;
+    }
+    
+    $result = db_query("SELECT b.friend as uid, u.name FROM friendlist b, users u WHERE b.uid=%d AND u.uid=b.friend ORDER BY b.timestamp DESC",$uid);
+    while ($account = db_fetch_object($result)) {
+      $link = l($account->name, "user/view/$account->uid");
+      if($show_remove_link) {
+        $link .= "&nbsp;&nbsp;" . l(t("[remove]"), "friendlist/delete/$account->uid");
+      }
+      $users[] = $link;
+    }
+    
+    if($show_count) {
+      $cnt = sizeof($users);
+      $title = "<b>($cnt user" . ($cnt == 1? '':'s') . ")</b>";
+    }
+
+    return theme("user_list",$users, $title);
+    
+  }
+  
+  // Lists all of the users who consider this user a friend.  Optionally include count.
+  function friendlist_list_friends_of($uid=null, $show_count=0) {
+    global $user;
+    if(!$uid && $user->uid > 0) {
+      $uid = $user->uid;
+    }
+      
+    $result = db_query("SELECT b.uid as uid, u.name FROM friendlist b, users u WHERE b.friend=%d AND u.uid=b.uid ORDER BY b.timestamp DESC",$uid);
+    while ($account = db_fetch_object($result)) {
+      $link = l($account->name, "user/view/$account->uid");
+      $users[] = $link;
+    }
+
+    if($show_count) {
+      $cnt = sizeof($users);
+      $title = "<b>($cnt " . t("user" . ($cnt == 1? '':'s')) . ")</b>";
+    }
+
+    return theme("user_list",$users, $title);
+    
+  }
+?>

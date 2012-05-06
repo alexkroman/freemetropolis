@@ -1,0 +1,493 @@
+<?php
+
+function taxonomy_context_link($type, $node = 0, $main = 0) {
+  if ($type == "system") {
+    taxonomy_context_show();
+  }
+}
+
+function taxonomy_context_show() {
+  if(variable_get("taxonomy_context_use_style", 1)) {
+    drupal_set_html_head("<link type=\"text/css\" rel=\"stylesheet\" href=\"modules/taxonomy_context/taxonomy_context.css\" />\n");
+  }
+  // drupal_set_html_head("<script type=\"text/javascript\" src=\"modules/taxonomy_context/image.js\"></script>\n");
+  $mode = arg(0);
+  $from = $_GET["from"];
+  if(!(empty($from))){
+    $paged = true;
+  }
+  else{
+    $paged = false;
+  }
+  if($mode == "node") {
+    $node = node_load(array("nid" => arg(2)));
+    $node_type = $node->type; 
+  }
+  $context = taxonomy_context_get_context();
+  if(($mode == "taxonomy") || ($node_type == "story") || ($node_type == "page")){
+    drupal_set_breadcrumb(taxonomy_context_get_breadcrumb($context->tid));
+  }
+  if (($mode == "taxonomy") && variable_get("taxonomy_context_show_term", 1)) {
+    $output .= taxonomy_context_show_term($context->tid, $paged);
+  }
+  if (variable_get("taxonomy_context_show_subterms", 1) && ($paged == false) && ($mode == "taxonomy")) {
+    $output .= taxonomy_context_show_subterms($context->tid);
+  }
+  drupal_set_message($output, "");
+}
+
+function taxonomy_context_get_buttons() {
+  $buttons = array();
+  $context = taxonomy_context_get_context();
+  if(variable_get("taxonomy_context_buttons_vocab", 1)) {
+    $tids = taxonomy_context_vocab_first_child_terms(variable_get("taxonomy_context_buttons_vocab", 1));
+    $buttons[0] = array();
+    $buttons[0]["url"] = "index.php";
+    $buttons[0]["name"] = "Home";
+    if ($_GET["q"] == variable_get("site_frontpage", "home")) {
+      $buttons[0]["status"] = 1;
+    }
+    else{
+      $buttons[0]["status"] = 0;
+    }
+    $buttons[0] = array2object($buttons[0]);
+    $t = 1;
+    foreach($tids as $tid) {
+      $button = taxonomy_get_term($tid);
+      $buttons[$t] = array();
+      $buttons[$t]["url"] = url("taxonomy/page/or/" . $button->tid);
+      $buttons[$t]["name"] = $button->name;
+      if($button->tid == $context->root_tid) {
+        $buttons[$t]["status"] = 1;
+      }
+      else {
+        $buttons[$t]["status"] = 0;
+      }
+      $buttons[$t] = array2object($buttons[$t]);
+      if($t == 5) {
+        break;
+      }
+      $t++;
+    }
+  }
+  return $buttons;
+}
+
+function taxonomy_context_buttons() {
+  $buttons = taxonomy_context_get_buttons();
+  $output .= "<div class=\"button-back\"><table cellpadding=\"0px\" cellspacing=\"0px\" border=\"0\"><tr>";
+  foreach($buttons as $button) {
+    if (!$button->status) {
+      $output .= theme("taxonomy_context_button_off", $button);
+    }
+    else {
+      $output .= theme("taxonomy_context_button_on", $button);
+    }
+  }
+  $output .= "</tr></table></div>\n";
+  return $output;
+}
+
+function theme_taxonomy_context_button_off($button) {
+  $output = "<td class=\"button button-off\" onmouseover=\"switchImg(this,'tab_on')\" onmouseout=\"switchImg(this,'tab')\"><a href=\"" . $button->url . "\">" . $button->name . "</a></td>";
+  return $output;
+}
+
+function theme_taxonomy_context_button_on($button) {
+  $output = "<td class=\"button button-on\"><a href=\"" . $button->url . "\">" . $button->name . "</a></td>";
+  return $output;
+}
+
+function taxonomy_context_get_context(){
+  $context = array("tid" => null, "root_tid" => null, "nid" => null, "vid" => null);
+  $mode = arg(0);
+  switch($mode){
+    case "taxonomy":
+      if((arg(1) == "page")||(arg(1) == "view")){
+        $tidcurrs = explode(",", arg(3));
+        $context["tid"] = $tidcurrs[0];
+        $context["root_tid"] = taxonomy_context_get_top_parent($context["tid"]);
+      }
+      break;
+    case "node":
+      if(arg(1) == "view"){
+        $context["nid"] = arg(2);
+        $tidscurr = taxonomy_node_get_terms(arg(2));
+        foreach($tidscurr as $tidcurr){
+          $context["tid"] = $tidcurr->tid;
+          break;
+        }
+        $context["root_tid"] = taxonomy_context_get_top_parent($context["tid"]);
+      }
+      break;
+    default:
+      break;
+  }
+  $context["vid"] = taxonomy_context_get_term_vocab($context["tid"]);
+  $context = array2object($context);
+  return $context;
+}
+
+function taxonomy_context_get_teaser($body) {
+//  $size = variable_get("xtemplate_term_teaser_length", 200);
+  $size = 200;
+  /*
+  ** If the size is zero, teasers are disabled so we
+  ** return the entire body.
+  */
+  if ($size == 0) {
+    return $body;
+  }
+
+  /*
+  ** If a valid delimiter has been specified, use it to
+  ** chop of the teaser.  The delimiter can be outside
+  ** the allowed range but no more than a factor two.
+  */
+
+  $delimiter = strpos($body, "<!--break-->");
+  if ($delimiter > 0) {
+    return substr($body, 0, $delimiter);
+  }
+
+  /*
+  ** If we have a short body, return the entire body:
+  */
+
+  if (strlen($body) < $size) {
+    return $body;
+  }
+
+  /*
+  ** In some cases no delimiter has been specified (eg.
+  ** when posting using the Blogger API) in which case
+  ** we try to split at paragraph boundaries.
+  */
+
+  if ($length = strpos($body, "<br />", $size)) {
+    return substr($body, 0, $length);
+  }
+
+  if ($length = strpos($body, "<br>", $size)) {
+    return substr($body, 0, $length);
+  }
+
+  if ($length = strpos($body, "</p>", $size)) {
+    return substr($body, 0, $length + 4);
+  }
+
+  if ($length = strpos($body, "\n", $size)) {
+    return substr($body, 0, $length);
+  }
+
+  /*
+  ** When even the first paragraph is too long, try to
+  ** split at the end of the next sentence.
+  */
+
+  if ($length = strpos($body, ". ", $size)) {
+    return substr($body, 0, $length + 1);
+  }
+
+  if ($length = strpos($body, "! ", $size)) {
+    return substr($body, 0, $length + 1);
+  }
+
+  if ($length = strpos($body, "? ", $size)) {
+    return substr($body, 0, $length + 1);
+  }
+
+  /*
+  ** Nevermind, we split it the hard way ...
+  */
+
+  return substr($body, 0, $size);
+}
+
+function taxonomy_context_get_breadcrumb($tid){
+  $breadcrumb[] = l(t("Home"), "");
+// could be extended here to include vocabulary
+  $parents = taxonomy_context_get_parents($tid);
+  if ($parents) {
+    $parents = array_reverse($parents);
+    foreach ($parents as $p) {
+      $breadcrumb[] = l($p->name, "taxonomy/view/or/$p->tid");
+    }
+  }
+  return $breadcrumb;
+}
+
+function taxonomy_context_show_subterms($tid){
+  $terms = taxonomy_context_get_subterms($tid);
+    
+  if(!(empty($terms))){
+    $output .= "<div class=\"clearspace\"></div>\n";
+	
+	
+	  
+
+  }
+  $output .= "<br /><br />";
+  return $output;
+}
+
+function taxonomy_context_get_subterms($tid){
+  $terms = array();
+  $i = 0;
+  if (empty($tid)) return false;
+  
+  $result = db_query("SELECT h.tid AS tid, d.name AS title, d.description AS description FROM {term_hierarchy} h INNER JOIN {term_data} d ON h.tid = d.tid WHERE h.parent = " . $tid . " ORDER BY d.weight, d.name");
+  while ($term = db_fetch_object($result)) {
+    $terms[$i] = $term;
+    $terms[$i]->image = taxonomy_context_get_img($term, "term", "summ");
+    $terms[$i]->body = taxonomy_context_get_teaser($term->description);
+    $i++;
+  }
+  return $terms;
+}
+
+function taxonomy_context_get_img($node, $type, $format){
+  if(module_exist("node_image")){
+    return node_image_get_image($node, $type, $format);
+  }
+  else{
+    return "";
+  }
+}
+
+function theme_taxonomy_context_subterm($term) {
+  $term_count = taxonomy_term_count_nodes($term->tid);
+  if ($term_count > 0) {
+  	$output .= l("$term->title (" . $term_count . ")","taxonomy/page/or/$term->tid/" . arg(4));
+  }
+  return $output;
+}
+
+function taxonomy_context_get_term_vocab($tid){
+  $vid = null;
+  $result = db_query("SELECT vid FROM {term_data} WHERE tid = %d", $tid);
+  while ($term = db_fetch_object($result)) {
+    $vid=$term->vid;
+  }
+  return $vid;
+}
+
+function taxonomy_context_get_node_term($nid){
+  $result = db_query("SELECT tid FROM {term_node} WHERE nid = %d", $nid);
+  while ($node_term = db_fetch_object($result)) {
+    if($node_term->tid!=0){
+      $tid=$node_term->tid;
+    }
+  }
+  return $tid;
+}
+
+function taxonomy_context_show_term($tid, $paged = false){
+  $term = taxonomy_get_term($tid);
+  if($paged == false){
+    $image = taxonomy_context_get_img($term, "term", "full");
+    $links = array();
+    if (user_access("administer taxonomy")) {
+       //$links[] = l(t("administer"), "admin/taxonomy/edit/term/$term->tid", array("title" => t("Administer this term.")));
+    }
+    if(module_exist("node_image") && user_access("create node and term images")){
+      if(!node_image_file_exists($term->tid,"term","full")){
+        $links[] = l(t("add images"), "node_image/add/term/$term->tid", array("title" => t("Add images for this term.")));
+      }
+      else{
+        $links[] = l(t("replace images"), "node_image/add/term/$term->tid", array("title" => t("Replace images for this term.")));
+      }
+    }
+    $term->image = $image;
+    $term->links = $links;
+    return theme("taxonomy_context_term", $term);
+  }
+  else{
+    return theme("taxonomy_context_term", array2object(array("name"=>$term->name, "image"=>null, "description"=>"",  "links"=>"")));
+  }
+}
+
+function theme_taxonomy_context_term($term) {
+  $output .= "<h2>" . $term->name . "</h2>\n";
+  if (!empty($term->description)) {
+	  $output .= "<p>" . $term->description . "</p><\n";
+  }
+  return $output;
+}
+
+function taxonomy_context_term_nodes($tid) {
+  $result = db_query("SELECT n.nid, n.type, n.title FROM (term_node} t, {node} n WHERE t.nid = n.nid AND n.status = 1 GROUP BY t.tid");
+  while ($node = db_fetch_object($result)) {
+    $count[$type][$term->tid] = $term->c;
+  }
+}
+
+function taxonomy_context_vocab_first_child_terms($vid) {
+  $terms = array();
+  $result = db_query("SELECT n.tid FROM {term_hierarchy} t, {term_data} n WHERE t.tid = n.tid AND n.vid = ".$vid." AND t.parent = 0 ORDER BY n.weight,n.name");
+  while ($term = db_fetch_object($result)) {
+    $terms[] = $term->tid;
+  }
+  return $terms;
+}
+
+function taxonomy_context_term_children($tid) {
+  $children = array();
+  $result = db_query("SELECT tid FROM {term_hierarchy} WHERE parent=" . $tid);
+  while ($term = db_fetch_object($result)) {
+    $children[] = $term->tid;
+  }
+  if(count($children)>0){
+    return $children;
+  }
+  else{
+    return false;
+  }
+}
+
+function taxonomy_context_show_children($tid, $base = false) {
+  $context = taxonomy_context_get_context();
+  $parents_str = "";
+  $parents_obj = taxonomy_context_get_parents($context->tid);
+  foreach($parents_obj as $p){
+    $parents_str .= $p->tid . ",";
+  }
+  $parents = explode(",", $parents_str);
+  $out .= "<div class=\"menu\"><ul>";
+  $children = taxonomy_context_term_children($tid);
+  if($children) {
+    foreach($children as $c) {
+      $term = taxonomy_get_term($c);
+      $params = array("title" => "View this section");
+      if($c == $context->tid){
+        $params["class"] = "active";
+      }
+      $link = l($term->name, "taxonomy/view/or/". $term->tid, $params);  
+
+      if (in_array($c, $parents)) {
+        $out .= "<li class=\"expanded\">" . $link . "</li>";
+        $out .= taxonomy_context_show_children($c, false);
+        $out .= "<ul>" . taxonomy_context_show_nodes($c) . "</ul>";
+      }
+      else{
+        $out .= "<li class=\"collapsed\">" . $link . "</li>";
+      }
+    }
+  }
+  if($base == true){
+    $out .= taxonomy_context_show_nodes($tid);
+  }
+  $out .= "</ul></div>";
+  return $out;
+}
+
+function taxonomy_context_show_nodes($tid){
+  $out = "";
+  $sql = "SELECT DISTINCT(n.nid), n.title, n.body, n.type, n.created, n.changed, n.uid, n.static, u.name FROM {node} n LEFT JOIN {term_node} r ON n.nid = r.nid LEFT JOIN {users} u ON n.uid = u.uid WHERE r.tid = $tid AND n.status = '1' AND n.promote = '1' ORDER BY static DESC, created DESC";
+  $result = db_query($sql);
+  while ($node = db_fetch_object($result)) {
+    $params = array("title" => node_teaser(strip_tags($node->body)));
+    $context = taxonomy_context_get_context();
+    if($node->nid == $context->nid){
+      $params["class"] = "active";
+    }
+    $link = l($node->title, "node/view/". $node->nid, $params);  
+    $out.= "<li class=\"leaf\">" . $link . "</li>";
+  }
+  return $out;
+}
+
+function taxonomy_context_get_top_parent($tid) {
+  $result = db_query("SELECT parent FROM {term_hierarchy} WHERE tid = %d", $tid);
+  while ($parent = db_fetch_object($result)) {
+    if($parent->parent == 0){
+      return $tid;
+    }
+    else{
+      return taxonomy_context_get_top_parent($parent->parent);
+    }
+  }
+}
+
+function taxonomy_context_get_parents($tid) {
+  if ($tid) {
+    $parents[] = taxonomy_get_term($tid);
+  }
+  $n = 0;
+  while ($parent = taxonomy_get_parents($parents[$n]->tid)) {
+    $parents = array_merge($parents, $parent);
+    $n++;
+  }
+
+  return $parents;
+}
+
+function taxonomy_context_block($op = "list", $delta = 0) {
+  $context = taxonomy_context_get_context();
+  if($op == "list") {
+    $vocabularies = taxonomy_get_vocabularies();
+    $i = 0;
+    foreach ($vocabularies as $vocabulary) {
+      $blocks[$i]["info"] = $vocabulary->name . " context";
+      $i++;
+    }
+    return $blocks;
+  }
+  else {
+    $context = taxonomy_context_get_context();
+    if($context->tid == null){
+      return;
+    }
+    
+    $parentid = taxonomy_context_get_top_parent($context->tid);
+
+    $vocabularies = taxonomy_get_vocabularies();
+    foreach($vocabularies as $vocabulary){
+      $vocabs[] = $vocabulary;
+    }
+
+    if($vocabs[$delta]->vid != $context->vid){
+      return;
+    }
+    $term = taxonomy_get_term($parentid);
+    $block["subject"] = $term->name;
+    $block["content"] = taxonomy_context_show_children($parentid, true);
+    return $block;
+  }
+}
+
+function taxonomy_context_access($op, $node) {
+  if ($op == "view") {
+    return $node->status;
+  }
+}
+
+function taxonomy_context_help($section = "admin/help#taxonomy_context") {
+  $output = "";
+
+  switch ($section) {
+
+    case 'admin/help#taxonomy_context':
+      $output = "<p>This module can be used to output title and description of the current taxonomy term plus child nodes of that term.  It has to be called by themes in the appropriate place in the header function.</p>";
+      break;
+    case 'admin/system/modules#description':
+      $output = t("This module can be used to output title and description of the current taxonomy term plus child nodes of that term.  It also generates a context-sensitive menu block for each vocabulary.");
+      break;
+  }
+
+  return $output;
+}
+
+function taxonomy_context_settings() {
+  $output .= form_select("Show term info", "taxonomy_context_show_term", variable_get("taxonomy_context_show_term", 1), array(t("Disabled"), t("Enabled")), t("Show additional information about current term (from description)."));
+  $output .= form_select("Show subterm info", "taxonomy_context_show_subterms", variable_get("taxonomy_context_show_subterms", 1), array(t("Disabled"), t("Enabled")), t("Show listings of subterms (sub-categories) for current term."));
+  $output .= form_select("Use style for term and subterm display", "taxonomy_context_use_style", variable_get("taxonomy_context_use_style", 1), array(t("Disabled"), t("Enabled")), t("Include style declaration to clean up display of taxonomy info.  Disable this option if you wish to do this instead through editing theme .css files."));
+  $vocabs = array(0 => "none");
+  $vocabularies = taxonomy_get_vocabularies();
+  foreach ($vocabularies as $vocabulary) {
+    $vocabs[$vocabulary->vid] = t($vocabulary->name);
+  }
+  $output .= form_select("Vocabulary to show buttons from", "taxonomy_context_buttons_vocab", variable_get("taxonomy_context_buttons_vocab", 1), $vocabs, t("ID of Vocabulary that you wish to use for page-top navigation buttons (displayed in some themes, e.g, gworks).  Select \"none\" if you do not wish to show buttons."));
+  return $output;
+}
+?>

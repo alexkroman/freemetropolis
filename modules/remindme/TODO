@@ -1,0 +1,12 @@
+This module will not change much, the idea below will be implemented in
+another module (see subscription.module).
+
+- subscribe to other node types
+    alert should be sent: - on update of a node
+                          - if a comment gets added
+
+  Memo: This is best done by specifying a standard behaviour
+        that can be overwritten and extended by modules with
+        specific needs (event.module for example).
+        The alert times should get into a separate table then.
+

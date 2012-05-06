@@ -1,0 +1,17 @@
+<pre>
+This is a horizontal menu template.
+This comment does not appear on the resulting page.
+
+If you eliminate the external table, the menu bar extends fills
+horizontally the browsing window.
+--
+</pre>
+
+<!-- BEGIN template --><!-- BEGIN horizontal_menu_cell -->
+<!-- BEGIN cell_link --><a href="{href}"{onmouseover}{target}><img id="{menu_layer_label}" onmouseover="MM_swapImage('{text}','','images/nav_{text}-over.gif',1);clearLMTO();" onmouseout="MM_swapImgRestore();setLMTO();" name="{text}" height="31" src="images/nav_{text}.gif" border="0" alt="" /></a><!-- BEGIN cell_icon --><!-- END cell_icon --> <!-- BEGIN cell_arrow --><!--<img src="s{imgwww}{downsrc}" width="{downwidth}" height="{downheight}"border="0" alt=">>" />--><!-- END cell_arrow --><!-- END cell_link -->
+<!-- END horizontal_menu_cell -->
+
+
+
+<!-- END template -->
+

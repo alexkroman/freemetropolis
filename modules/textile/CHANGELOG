@@ -1,0 +1,77 @@
+textile.module
+CHANGELOG
+$Id: CHANGELOG,v 1.4.2.4 2004/07/28 16:09:48 jhriggs Exp $
+
+2004-07-28
+- release 2.0.4/2004072800
+- textilephp: import of TextilePHP 2.0.4 which is (non-strict)
+  PHP5-compliant
+
+2004-05-29
+- release 2.0.3/2004052900
+- textile.module
+  - updated quoting
+  - fixed admin help link
+  - changed heredoc strings to multiline
+  - added @private marks
+  - added DrupalTextile (MTLikeTextile subclass) which fixes footnote
+    links in Drupal context (fixes bug 8037 reported by me)
+- textilephp: import of TextilePHP 2.0.2
+- smartypants-php: import of SmartyPants-PHP 1.4.1-r2
+- Textile.php, SmartyPants-PHP.inc: removed
+
+2004-05-27
+  - release 2.0.2/2004052700
+  - SmartyPants-PHP.inc: added
+  - INSTALL, README, CREDITS, textile.module: updated for SmartyPants
+
+2004-05-25
+  - release 2.0.1/2004052500
+  - INSTALL, README: added note about title.module
+  - Textile.php: updated to version 2.0.1 which fixes a bug with link
+    lookup lists
+
+2004-05-24
+  - release 2.0/2004052400
+  - textile.module
+    - no longer uses "invisible" tags in the node body/teaser to
+      identify Textile input; "visible" [textile] and optional
+      [/textile] tags now mark Textile data; legacy Textile nodes are
+      updated automatically (fixes bug 7348 reported by jluster)
+    - _textile_is_installed() and _textile_install() methods
+      implemented to allow automatic legacy update
+    - nodeapi support removed, as it is unneeded with new tags
+      (nullifies bugs/features 3992, 5824, and 5195 reported by ber
+      kessels, mic, and weitzman, respectively)
+    - fixed phpdoc comments
+  - Textile1.php, Textile2.php: removed
+  - Textile.php: PHP port of Brad Choate's Textile.pm Perl module
+    available at <http://jimandlissa.com/project/textilephp> replaces
+    Textile(1|2).php (fixes bug 4439 reported by Eric Scouten)
+
+2004-03-26
+  - release 1.1.0/2004032601
+  - textile.module: updated for Drupal 4.4
+
+2004-03-26
+  - release 1.0.3/2004032600
+  - textile.module
+    - added update of include path via ini_set() for Textile(1|2).php
+      includes
+    - only the first 100 characters of filtered text are checked for
+      the Textile tag
+
+2003-11-09
+  - release 1.0.2/2003110900
+  - Textile2.php: changed preg_replace_callback() calls to $this to
+    use array(&$this, ...) instead of array($this, ...) to ensure that
+    member variables get updated properly (fixes bug 4021 reported by
+    me)
+
+2003-11-06
+  - release 1.0.1/2003110600
+  - textile.module: added module description for "administer >
+    configuration > modules" list
+
+2003-11-04
+  - initial release 1.0/2003110400

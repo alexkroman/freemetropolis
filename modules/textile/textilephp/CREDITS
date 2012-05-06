@@ -1,0 +1,9 @@
+TextilePHP
+CREDITS
+@(#) $Id: CREDITS,v 1.1.2.2 2004/07/28 16:08:41 jhriggs Exp $
+
+Textile.pm written by
+  - Brad Choate <brad at bradchoate dot com>
+
+Textile.php ported from Textile.pm by
+  - Jim Riggs <textile at jimandlissa dot com>

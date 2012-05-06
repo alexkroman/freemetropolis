@@ -1,0 +1,205 @@
+<?php
+// $Id: remindme.module,v 1.16.2.3 2004/05/15 19:18:09 killes Exp $
+
+function remindme_help($section){
+  switch($section) {
+    case 'admin/system/modules#description':
+    $output = t('A module to remind users of upcoming events.');
+    break;
+  }
+  return $output;
+}
+
+function remindme_perm() {
+  return array("set reminders", "administer remindme");
+}
+
+function remindme_link($type, $node = 0, $main = 0) {
+  switch ($type) {
+  case 'node':
+    if ($node->type == "event" && user_access("set reminders")) {
+      $links[] =l(t("remind me!"), "remindme/node/$node->nid", array("title" => t("Remind me of this event")));
+    }
+    break;
+  case 'system':
+    if (user_access('set reminders') && module_exist('taxonomy')) {
+      if (module_exist('taxonomy') && count(taxonomy_get_vocabularies('event')) > 0) {
+        menu('remindme', t('remind me!'), 'remindme_page');
+      }
+      else {
+        menu('remindme', t('remind me!'), 'remindme_page', 0, MENU_HIDE);
+      }
+    }
+    break;
+  }
+
+  return $links ? $links : array();
+}
+
+function remindme_page() {
+  global $user;
+
+  $op = $_POST["op"];
+  if(!$op) $op = arg(1);
+  $edit = $_POST["edit"];
+
+  if (user_access("set reminders") && $user->uid > 0) {
+    switch ($op) {
+      case "cron":
+        remindme_cron();
+        break;
+      case t("Remind me"):
+        db_query("DELETE FROM {remindme_node} WHERE uid = %d AND nid = %d", $user->uid, $edit["nid"]);
+        foreach($edit["time"] as $time) {
+          if($time) { 
+            db_query("INSERT INTO {remindme_node} (uid, nid, timestamp) VALUES (%d, %d, %d)", $user->uid, $edit["nid"], $time);
+          }
+        }
+        drupal_set_message(t("You will be reminded at the selected times."));
+        drupal_goto("node/view/". $edit["nid"]);
+        break;
+      case "node":
+        $array = _remindme_period();
+        $result = db_query("SELECT * FROM {remindme_node} WHERE uid = %d AND nid = %d", $user->uid, arg(2));
+        $times = array();
+        while($date = db_fetch_object($result)) {
+          $times[] = $date->timestamp;
+        }
+        $node = node_load(array("nid" => arg(2)));
+        $form .= form_select(t("Remind me about this event"), "time", $times, $array, t("Remind me via email at the selected times before start about this event."), 0, 1);
+        $form .= form_hidden("nid", arg(2));
+        $form .= form_submit(t("Remind me"));
+
+        $form = form($form);
+        $form .= node_view($node);
+        print theme('page', $form, $node->title);
+        break;
+      case t("Save settings"):
+        $result = db_query("SELECT tid FROM {remindme_term} WHERE uid = %d", $user->uid);
+        $terms = array();
+        while($term = db_fetch_object($result)) {
+          $terms[] = $term->tid;
+        }
+        db_query("DELETE FROM {remindme_term} WHERE uid = %d", $user->uid);
+        if(is_array($edit["taxonomy"])) {
+          foreach ($edit["taxonomy"] as $tids) {
+            foreach ($edit["period"] as $time) {
+              if ($time && $tids > 0) {
+                db_query("INSERT INTO {remindme_term} (uid, tid, timestamp) VALUES (%d, %d, %d)", $user->uid, $tids, $time);
+              }
+            }
+          }
+          $result = db_query("SELECT e.nid FROM {event} e INNER JOIN {node} n ON e.nid = n.nid INNER JOIN {term_node} t ON t.nid = n.nid WHERE t.tid IN (". implode(",", $edit["taxonomy"]) .") AND e.start > %d", time());
+          while($node = db_fetch_object($result)) {
+            foreach ($edit["period"] as $time) {
+              if ($time) {
+                db_query("INSERT INTO {remindme_node} (uid, nid, timestamp) VALUES (%d, %d, %d)", $user->uid, $node->nid, $time);
+              }
+            }
+          }
+        }
+        if(is_array($edit["taxonomy"])) {
+          $terms = array_diff($terms, $edit["taxonomy"]);
+          if (count($terms)) {
+            $result = db_query("SELECT * FROM {remindme_node} r INNER JOIN {term_node} t ON r.nid = t.nid WHERE t.tid IN (". implode(", ", $terms) .") AND r.uid = %d", $user->uid);
+          }
+          else {
+            $result = db_query("SELECT * FROM {remindme_node} r INNER JOIN {term_node} t ON r.nid = t.nid WHERE r.uid = %d", $user->uid);
+          }
+        }
+        else {
+          $result = db_query("SELECT * FROM {remindme_node} r INNER JOIN {term_node} t ON r.nid = t.nid WHERE r.uid = %d", $user->uid);
+        }
+        while($node = db_fetch_object($result)) {
+          db_query("DELETE FROM {remindme_node} WHERE nid = %d AND uid = %d", $node->nid, $user->uid);
+        }
+        drupal_set_message(t("Settings saved"));
+      default:
+        $vocs = taxonomy_get_vocabularies("event");
+        if (count($vocs) > 0) {
+          $result = db_query("SELECT r.tid, r.timestamp FROM {remindme_term} r WHERE r.uid = %d ", $user->uid);
+          $selected = array();
+          $times = array();
+          while($remindme = db_fetch_object($result)) {
+            $selected[] = $remindme->tid;
+            $times[] = $remindme->timestamp;
+          }
+          foreach($vocs as $key => $voc) {
+            $form .= _taxonomy_term_select($voc->name, "taxonomy", $selected, $key, t("Select the terms for which you whish to receive reminders via email."), 1, 1);
+          }
+
+          $period = _remindme_period();
+          $form .= form_select(t("Send reminders"), "period", $times, $period, t("How long before the event should the reminder(s) be sent?"), 0, 1);
+          $form .= form_submit(t("Save settings"));
+
+          print theme('page', form($form), t('Reminders'));
+       }
+       else {
+          print theme('page', t('No vocabularies have been configured for use with events, you can only set reminders for individual events.'), t('Reminders'));
+       }
+    }
+  }
+  else {
+    print message_access();
+  }
+}
+
+function remindme_write($node, $op, $arg) {
+  if ($node->type == "event" && $node->taxonomy) {
+    if ($op == "update") db_query("DELETE FROM {remindme_node} WHERE nid = %d", $node->nid);
+    $result = db_query("SELECT * FROM {remindme_term} WHERE tid IN (". implode(", ", $node->taxonomy) .")");
+    while($tid = db_fetch_object($result)) {
+      db_query("INSERT INTO {remindme_node} (uid, nid, timestamp) VALUES (%d, %d, %d)", $tid->uid, $node->nid, $tid->timestamp);
+    }
+  }
+}
+
+function remindme_nodeapi(&$node, $op, &$arg) {
+  global $error;
+  switch ($op) {
+    case "insert":
+    case "update":
+      remindme_write($node, $op, $arg);
+      break;
+    case "delete":
+      db_query("DELETE FROM {remindme_node} WHERE nid=%d", $node->nid);
+      break;
+  }
+}
+
+function remindme_cron() {
+  if (time() - variable_get("remindme_send_last", 0) > variable_get("remindme_send", 86400)) {
+    $sql = "SELECT r.nid, r.timestamp, u.uid AS user, u.name, u.mail, n.title, n.body, e.start FROM {remindme_node} r INNER JOIN {node} n ON r.nid = n.nid INNER JOIN {users} u ON r.uid = u.uid INNER JOIN {event} e ON e.nid = r.nid WHERE n.status = 1 AND r.timestamp > 0 AND ". variable_get("remindme_send_last", time()) ." + r.timestamp > e.start GROUP BY user, n.nid";
+    $result = db_query($sql);
+    while ($node = db_fetch_object($result)) {
+      $status = remindme_mail($node);
+      if ($status) {
+        db_query("DELETE FROM {remindme_node} WHERE timestamp = %d AND nid = %d AND uid = %d", $node->timestamp, $node->nid, $node->user);
+        watchdog('remindme', "reminded user $node->user about event $node->title");
+      }
+    }
+    variable_set("remindme_send_last", time());
+  }
+}  
+
+function remindme_mail($node) {
+  $from = variable_get("site_mail", ini_get("sendmail_from"));
+  $subject = variable_get("site_name", "drupal") ." ". strtr(t("Reminder for »%title«"), array ("%title" => $node->title));
+  $to = "$node->name <". $node->mail .'>';
+  $body = strtr(t("Greetings %name,\n\nYou wanted to get a reminder for the event %title. It starts at %time, you can see more details at %url , the body is appended below.") , array('%name' => $node->name, '%title' => $node->title, '%time' => format_date($node->start, "medium"), '%url' => url("node/view/$node->nid", NULL, NULL, 1))) ."\n\n$node->body";
+
+  return user_mail($to, $subject, $body, "From: $from\nReply-to: $from\nX-Mailer: Drupal (remindme.module)\nReturn-path: <$from>\nErrors-to: $from\n");
+}
+
+function remindme_settings() {
+  $period = _remindme_period();
+  $output .= form_select("Send reminders every", "remindme_send", variable_get("remindme_send", 86400), $period, "Requires crontab.");
+//  $output .= form_select("Number of failed sends after which notifications are disabled", "remindme_attempts", variable_get("remindme_attempts", 5), array("Disabled", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20));
+
+  return $output;
+}
+
+function _remindme_period() {
+  return array(0 => t("Disabled"), 900 => format_interval(900), 1800 => format_interval(1800), 3600 => format_interval(3600), 10800 => format_interval(10800), 21600 => format_interval(21600), 32400 => format_interval(32400), 43200 => format_interval(43200), 86400 => format_interval(86400), 172800 => format_interval(172800), 259200 => format_interval(259200), 604800 => format_interval(604800), 1209600 => format_interval(1209600), 2419200 => format_interval(2419200));
+}
+?>

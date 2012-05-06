@@ -1,0 +1,1558 @@
+<?php
+/* $Id: rsvp.module,v 1.4 2004/10/25 03:11:03 alex Exp $ */
+
+/**
+ * @module rsvp
+ * @package rsvp - A drupal module developed for civicspace - a distribution of drupal.
+ * @description Provides email invite and tracking functionality for event nodes. Requires event.module.
+ * @author crunchywelch (welch@c-wsolutions.com)
+ *
+ */
+
+/**
+ * @defgroup rsvp_core core functions for rsvp.
+ */
+
+/**
+ * Provides a link to the CSS stylesheet associated with this module.
+ *
+ * @ingroup rsvp_core
+ * @return a &lt;style&gt; tag that indicates what file browsers should import
+ */
+function rsvp_html_head() {
+  return '<style type="text/css">@import url(modules/rsvp/rsvp.css);</style>';
+}
+
+/**
+ * Provides a pathetically small amount of help information for the rsvp module.
+ *
+ * @ingroup rsvp_core
+ */
+function rsvp_help($section){
+  switch($section) {
+    case 'admin/system/modules#description':
+    $output = t('Provides rsvp functionality for events and other node types.');
+    break;
+  }
+  return $output;
+}
+
+/**
+ * Provides the rsvp permission information for the drupal system.
+ *
+ * @ingroup rsvp_core
+ */
+function rsvp_perm() {
+  return array("access rsvp invites", "set rsvp preferences", "administer rsvp", "create rsvp");
+}
+
+/**
+ * Provides the rsvp link information for the drupal system.
+ *
+ * @ingroup rsvp_core
+ */
+function rsvp_link($type, $node = 0, $main = 0) {
+  switch ($type) {
+  case 'node':
+    if ($node->type == "event") {
+      if(_rsvp_is_invited($node->nid)){
+		  // $links[] =l(t('view invitation'), "rsvp/invites/node/$node->nid", array("title" => t('View your invitations to this event')));
+      }
+      if(_rsvp_has_rsvps($node->nid)){
+		  // $links[] =l(t('manage rsvp'), "rsvp/manage/node/$node->nid", array("title" => t('Manage your rsvps for this event')));
+      }
+      if(user_access('create rsvp')) {
+		  // $links[] =l(t('create rsvp'), "rsvp/create/$node->nid", array("title" => t('Create an rsvp and invite others to this event')));
+      }
+    }
+    break;
+  case 'system':
+    drupal_set_html_head(rsvp_html_head());
+    menu('rsvp/email', t('view invite'), 'rsvp_view_invite', 0, MENU_HIDE);
+    if (user_access('create rsvp')) {
+      menu('rsvp', t('invites'), 'rsvp_view_invites');
+      menu('rsvp/manage', t('manage'), 'rsvp_manage');
+      menu('rsvp/edit', t('edit rsvp'), 'rsvp_edit', 0, MENU_HIDE);
+      menu('rsvp/create', t('&nbsp;&nbsp;create rsvp'), 'rsvp_create', 0, MENU_HIDE);
+      menu('rsvp/send', t('&nbsp;&nbsp;send rsvp invite'), 'rsvp_send', 0, MENU_HIDE);
+      menu('rsvp/resend', t('send rsvp invite'), 'rsvp_send', 0, MENU_HIDE);
+      menu('rsvp/attendees', t('manage rsvp attendees'), 'rsvp_manage_attendees', 0, MENU_HIDE);
+      menu('rsvp/remove', t('remove rsvp attendee'), 'rsvp_manage_attendees', 0, MENU_HIDE);
+      menu('rsvp/status', t('get invite status'), 'rsvp_view_invite', 0, MENU_HIDE);
+    }
+    if (user_access('access rsvp invites')) {
+		menu('rsvp/invites', t('&nbsp;&nbsp;invites'), 'rsvp_view_invites',0,MENU_HIDE);
+      menu('rsvp/invites/invites', t('&nbsp;&nbsp;&nbsp;&nbsp;view invites'), 'rsvp_view_invites',0, MENU_HIDE);
+      menu('rsvp/invites/preferences', t('&nbsp;&nbsp;&nbsp;&nbsp;set prefs'), 'rsvp_preferences', 0,MENU_HIDE);
+      menu('rsvp/view', t('&nbsp;&nbsp;view invite'), 'rsvp_view_invite', 0, MENU_HIDE);
+      menu('rsvp/message', t('&nbsp;&nbsp;view invite'), 'rsvp_message', 0, MENU_HIDE);
+    }
+    if (user_access('administer rsvp')) {
+      menu('rsvp/manage/all', t('manage all rsvps'), 'rsvp_manage', 0, MENU_HIDE);
+    }
+    break;
+  }
+  return $links ? $links : array();
+}
+
+/**
+* Handles the rsvp create requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp create response.
+*/
+function rsvp_create() {
+  global $user;
+  $op = $_POST["op"];
+
+  switch ($op) {
+    case t('Create RSVP'):
+        $edit = $_POST['edit'];
+        $rid = rsvp_create_rsvp($edit, $user->uid);
+        if($rid!=-1) {
+          if($edit['contact_search']!="--") {
+            $contacts = _rsvp_get_contacts($edit['contact_search']).',';
+          }
+          rsvp_set_invites($contacts.$edit['invite_list'], $rid);
+          $form = "<div class=\"rsvpalert\">".t('Invitations have not yet been sent!')."</div>";
+          $form .= form_hidden('rid', $rid);
+          $form .= form_submit(t('Send Invite'));
+          $form .= form_submit(t('Edit RSVP'));
+          $content = "<div class=\"rsvpform\">";
+          $content .= form($form);
+          $content .= "</div>";
+          $content .= rsvp_show_rsvp($rid);
+          $content .= rsvp_show_attendees($rid);
+          print theme('page', $content, "Created RSVP: ".$edit['name']);
+        }
+        else {
+          print theme('page', t('There was an error processing your request. Please try again.'), t('Error Creating RSVP.'));
+        }
+      break;
+    case t('Edit RSVP'):
+        drupal_goto("rsvp/edit/". $_POST['edit']['rid']);
+      break;
+    case t('Send Invite'):
+        drupal_goto("rsvp/send/". $_POST['edit']['rid']);
+      break;
+    default:
+        $node = node_load(array("nid" => arg(2)));
+        $form = rsvp_create_form(arg(2));
+        print theme('page', $form, t('Create RSVP for: '). $node->title ." on ". date("M d,  Y", $node->start));
+      break;
+  }
+}
+
+/**
+* Handles the rsvp edit requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp edit response.
+*/
+function rsvp_edit() {
+  global $user;
+  $op = $_POST["op"];
+  $edit = $_POST["edit"];
+  if(_rsvp_is_owner(arg(2)) || user_access('administer rsvp')) {
+    switch ($op) {
+      case t('Delete RSVP'):
+          $content = rsvp_delete_form($edit['rid']);
+          print theme('page', $content, t('Delete RSVP?'));
+        break;
+      case t('Delete'):
+          rsvp_delete_rsvp($edit['rid']);
+          print theme('page', l(t('manage rsvps'), "rsvp/manage", array('title'=>'rsvp management page')), t('RSVP Deleted'));
+        break;
+      case t('Update RSVP'):
+          rsvp_update_rsvp($edit);
+          drupal_goto("rsvp/manage/". $edit['rid']);
+        break;
+      default:
+          $content = rsvp_edit_form(arg(2));
+          print theme('page', $content, t('Edit RSVP'));
+        break;
+    }
+  }
+  else {
+    print theme('page', t('You do not have permissions to edit this rsvp.'), t('RSVP Manage Attendees'));
+  }
+}
+
+/**
+* Handles the rsvp single invite requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp invite view response.
+*/
+function rsvp_view_invite() {
+  $hash = arg(2);
+  $op = $_POST["op"];
+  $edit = $_POST["edit"];
+
+  if (arg(1)=='status') {
+  //   if (!(_rsvp_is_owner($invite->rid) || user_access('administer rsvp'))) {
+// 		// print theme('page', t('You do not have permission to view the status of this invitation'), t('RSVP Invite'));
+//     }
+//     else {
+      $invite = db_fetch_object(_rsvp_get_invite($hash));
+      $content = rsvp_show_replystatus($hash, 0, 0);
+      $content .= l(t('back'), "rsvp/attendees/".$invite->rid, array("title" => t('Back to rsvp attendee management')));
+  //   }
+  }
+  else {
+    _rsvp_set_recieved($hash);
+    $invite = db_fetch_object(_rsvp_get_invite($hash));
+
+    //check for uid and user login prefs
+    if(_rsvp_allow_reply($hash)) {
+      if ($op==t('Reply')) {
+        _rsvp_set_reply($edit);
+      }
+    }
+
+    if($op==t('Confirm')) {
+      $usermatch = user_load(array('name' => $edit['name'], 'pass' => $edit['pass'], "status" => 1));
+      if($usermatch->uid) {
+        $edit["destination"] = 'rsvp/email/'. $hash;
+        _rsvp_set_user($hash, $usermatch->uid);
+        user_login($edit);
+      } else {
+        $content = '<div class="rsvpalert">'. t('Sorry, that password was incorrect, please try again.') .'</div>';
+        $content .= rsvp_confirm_email_form($hash);
+      }
+    }
+    else if($op==t('Add Attendees') && _rsvp_is_invite_viral($invite->rid)) {
+      $rsvp = db_fetch_object(_rsvp_get_rsvp($invite->rid));
+      rsvp_set_invites($edit['invite_list'], $invite->rid);
+      _rsvp_mail_rsvp($invite->rid, 1);
+      if(!_rsvp_is_blind($invite->rid)) {
+        $content = rsvp_show_attendees($invite->rid, 0);
+      }
+      $title = t('- invited attendees to: ').$rsvp->name;
+    }
+    else if($op==t('Send Message') && _rsvp_is_invite_message_enabled($invite->rid)) {
+      $rsvp = db_fetch_object(_rsvp_get_rsvp($invite->rid));
+      $content = _rsvp_message_rsvp($_POST['edit'], 1);
+      $title = t('- Sent email message to: ').$rsvp->name;
+    }
+    else if(_rsvp_check_user_email($hash) && !_rsvp_is_invite_confirmed($hash) && !$op==t('Continue')) {
+      $content = rsvp_confirm_email_form($hash);
+    }
+    else if(!_rsvp_check_invite_owner_status($hash)) {
+      // if the invite is confirmed and the logged in user is not the owner
+      // or if the invite is not confirmed, and the logged in user's email does not match that of the invite
+      $content = t('You are logged in as someone other than the owner of this rsvp invite. Please logout before replying to this invite.');
+    }
+    else {
+      $content = rsvp_show_event($invite->rid);
+      $content .= rsvp_show_rsvp($invite->rid, 0);
+      if(_rsvp_allow_reply($hash)) {
+        $content .= form_group(t('Reply'), rsvp_show_replystatus($hash));
+      }
+      else {
+        $title .= t('- Please login to update or change your reply to this invitation.');
+      }
+      if(_rsvp_is_invite_viral($invite->rid)) {
+        $form = rsvp_attendee_form($invite->rid);
+      }
+      if(_rsvp_is_invite_message_enabled($invite->rid)) {
+        $form .= rsvp_message_form($invite->rid);
+      }
+      if($form){
+        $content .= form_group(t('Actions'), $form);
+      }
+      if(!_rsvp_is_blind($invite->rid)) {
+        $content .= rsvp_show_attendees($invite->rid, 0);
+      }
+    }
+  }
+
+  print theme('page', $content, t('RSVP Invite ').$title);
+}
+
+/**
+* Handles the rsvp invites requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp invites list view response.
+*/
+function rsvp_view_invites() {
+  global $user;
+  $content = "<div class=\"rsvpbox\">";
+  if(arg(2)=='node') {
+    $node = node_load(array("nid" => arg(3)));
+    $invites = _rsvp_get_node_invites($user->uid, arg(3));
+    if($node) {
+      $title = t('Your Invites for: '). $node->title ." on  ". date("M d,  Y", $node->start);
+    }
+    else {
+      $title = t('The event associated with this event has been deleted');
+    }
+  }
+  else {
+    $invites = _rsvp_get_invites($user->uid);
+    $title = t('Your RSVP Invites');
+  }
+
+$header = array(
+			array("data" => t("name"), "field" => "", "width" => "600")
+		
+			);
+  while ($invite = db_fetch_object($invites)){
+    $node = node_load(array("nid" => $invite->nid));
+    if($node) {
+      $nodetitle = $node->title ." on ". date("M d,  Y", $node->start);
+    }
+    else {
+      $nodetitle = t('(event deleted)');
+    }
+    $link = drupal_specialchars($invite->name." for: ". $nodetitle);
+    $list[] = array("data" => l($link, "rsvp/view/". $invite->hash, array('title'=>'view invite')));
+  }
+  if(count($list)==0) {
+    $content .= t('No invitations yet.');
+  }
+  
+  
+  $content .= "</div>";
+  $content .= "These are the RSVP's that you have been sent.<br /><br />";
+  
+  $content .= theme("table", $header, $list);
+  $breadcrumbs[] = l('Home','');
+  $breadcrumbs[] = l('Invitations','rsvp');
+  drupal_set_breadcrumb($breadcrumbs);
+  
+  print theme('page', $content, $title);
+}
+
+/**
+* Handles the rsvp manage requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp manage response.
+*/
+function rsvp_manage() {
+  global $user;
+  $op = $_POST['op'];
+
+  if($op==t('Send Invite')) {
+    drupal_goto("rsvp/send/". arg(2));
+  }
+  else if ($op==t('Re-send Invite')) {
+    drupal_goto("rsvp/resend/". arg(2));
+  }
+  else if ($op==t('Send Message')) {
+    drupal_goto("rsvp/message/". arg(2));
+  }
+
+  if (user_access("administer rsvp") && arg(2)!='all') {
+    $content .= "<div class=\"\">". l(drupal_specialchars(t('view all rsvps')), 'rsvp/manage/all', array('title'=>'view all rsvps') ) ."</div>";
+  }
+  $content .= "<div class=\"rsvpbox\">";
+  if(arg(2)=='all') {
+    if(user_access("administer rsvp")) {
+      $rsvps = _rsvp_get_all_rsvps();
+    }
+    else {
+      $rsvps = _rsvp_get_rsvps($user->uid);
+    }
+  }
+  else if(arg(2)=='node') {
+    $node = node_load(array("nid" => arg(3)));
+    $rsvps = _rsvp_get_node_rsvps(arg(3));
+    $title = t('Manage RSVPs for: '). $node->title ." on  ". date("M d,  Y", $node->start);
+  }
+  else if(arg(2)){
+    $content = "<div class=\"\">". l(drupal_specialchars(t('manage attendees')), 'rsvp/attendees/'. arg(2), array('title'=>'add and view attendees for this rsvp') ) ."</div>";
+    $form .= form_submit(t('Send Invite'));
+    $form .= t('<br />This will send the invitation to any attendees who have not yet received one.<br />');
+    $form .= form_submit(t('Re-send Invite'));
+    $form .= t('<br />This will send the invitation to any attendees who have not yet viewed thier invite.<br />');
+    $form .= form_submit(t('Send Message'));
+    $form .= t('<br />Send a new message to the attendees.<br />');
+    $content .= rsvp_show_event(arg(2));
+    $content .= rsvp_show_rsvp(arg(2));
+    $content .= form($form);
+    $title = t('Manage RSVP');
+  }
+  else {
+    $rsvps = _rsvp_get_rsvps($user->uid);
+    $title = t('Manage Your RSVPs');
+  }
+  while ($rsvp = db_fetch_object($rsvps)){
+    $links = array();
+    $node = node_load(array("nid" => $rsvp->nid));
+    if($node) {
+      $nodetitle = $node->title ." on ". date("M d,  Y", $node->start);
+    }
+    else {
+      $nodetitle = t('(event deleted)');
+    }
+    $item = drupal_specialchars($rsvp->name." for: ". $nodetitle);
+	$action = null;
+	
+    $action .= l(t('view'), "rsvp/manage/". $rsvp->rid, array('title'=>'view rsvp'));
+    $action .= " | " . l(t('edit'), "rsvp/edit/". $rsvp->rid, array('title'=>'edit rsvp'));
+    $action .= " | " . l(t('attendees'), "rsvp/attendees/". $rsvp->rid, array('title'=>'manage attendees'));
+    
+	$rows[] = array('data' => $item, 'data2' => $action);
+	
+  }
+ 
+	$header = array(
+			array("data" => t("name"), "field" => "", "width" => "310"),
+			array("data" => t("actions"), "field" => "", "align" => 'right', "width"=> '150')
+			);
+	$content .= "These are all of the RSVP's that you have sent out<br /><br />";
+	
+  $content .= theme('table', $header, $rows);
+  $content .= "</div>";
+  print theme('page', $content, $title);
+}
+
+/**
+* Handles the rsvp attendee management requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp attendee management response.
+*/
+function rsvp_manage_attendees() {
+    if(_rsvp_is_owner(arg(2)) || user_access('administer rsvp')) {
+      if($_POST['op']==t('Add Attendees')) {
+        $edit = $_POST['edit'];
+        if($edit['contact_search']!="--") {
+          $contacts = _rsvp_get_contacts($edit['contact_search']).',';
+        }
+        rsvp_set_invites($contacts.$edit['invite_list'], arg(2));
+      }
+      if(arg(1)=='remove'){
+        _rsvp_remove_attendee(arg(3));
+      }
+      $rsvp = db_fetch_object(_rsvp_get_rsvp(arg(2)));
+      $content .= rsvp_attendee_form(arg(2));
+      $content .= rsvp_show_attendees(arg(2));
+      print theme('page', $content, t('RSVP Manage Attendees'). ' - ' .$rsvp->name);
+    }
+    else {
+      print theme('page', t('You do not have permissions to edit this rsvp.'), t('RSVP Manage Attendees'));
+    }
+}
+
+/**
+* Handles the rsvp invite sending requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp invite sending response.
+*/
+function rsvp_send() {
+  $rsvp = db_fetch_object(_rsvp_get_rsvp(arg(2)));
+  if (arg(1)=='resend') {
+    $title = t('Invitation email re-sent for : ').$rsvp->name;
+    $content = _rsvp_mail_rsvp(arg(2), 1, 1);
+  }
+  else {
+    $title = t('Invitation email sent for : ').$rsvp->name;
+    $content = _rsvp_mail_rsvp(arg(2), 1);
+  }
+
+  print theme('page', $content, $title);
+}
+
+/**
+* Handles the rsvp message sending requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp message sending response.
+*/
+function rsvp_message() {
+  if($_POST['op']==t('Send Message')) {
+    $rsvp = db_fetch_object(_rsvp_get_rsvp($_POST['edit']['rid']));
+    $content = _rsvp_message_rsvp($_POST['edit'], 1);
+    $title = t('Sent email message to: ').$rsvp->name;
+  }
+  else {
+    $rsvp = db_fetch_object(_rsvp_get_rsvp(arg(2)));
+    $title = t('Send email message to: ').$rsvp->name;
+    $content = rsvp_message_form($rsvp->rid);
+  }
+  print theme('page', $content, $title);
+}
+
+/**
+* Handles the rsvp user preferences requests.
+*
+* @ingroup rsvp_core
+* @return themed rsvp user preferences response.
+*/
+function rsvp_preferences() {
+  $title = t('RSVP Preferences');
+  if ($_POST["op"]==t('Update Preferences')) {
+    _rsvp_set_preferences($_POST['edit']);
+    $title = t('RSVP Preferences - Saved');
+  }
+  $content = rsvp_preferences_form();
+  print theme('page', $content, $title);
+}
+
+/**
+ * @defgroup rsvp_form functions for rsvp forms.
+ */
+
+/**
+* Displays the rsvp create form
+*
+* @ingroup rsvp_form
+* @param $nid The id of the event the rsvp is created for.
+* @return html formatted rsvp create form.
+*/
+function rsvp_create_form($nid) {
+  $form .= form_textfield(t('RSVP Name'),'name', '', 40, 40, t('This is the name of your rsvp'));
+  $form .= form_textarea(t('RSVP Message'), 'invite_text', '', 70, 5, t('This text will be sent to the people you invite'));
+  $form .= form_textarea(t('Invite List'), 'invite_list', '', 70, 5, t('Enter email addresses separated by commas'));
+  if(module_exist('contact')){
+    $result = _rsvp_get_contact_searches();
+    $searches['--'] = '--';
+    while($search = db_fetch_object($result)){
+      $searches[$search->sid] = $search->name;
+    }
+    $form .= form_select(t('Contact search'), 'contact_search', '--', $searches, t('Select a saved contact search to invite'));
+  }
+  $form .= form_checkbox(t('Hide attendees'), 'blind', 1, 0, t('Prevent attendees from seeing who else is on the list'));
+  $form .= form_checkbox(t('Allow list email'), 'list_email', 1, 0, t('Allow attendees to email everyone on the list'));
+  $form .= form_checkbox(t('Allow attendee invites'), 'allow_invite', 1, 0, t('Allow attendees to invite more people to the event'));
+  $form .= form_hidden("nid", $nid);
+  $form .= form_submit(t('Create RSVP'));
+  return form($form);
+}
+ 
+/**
+* Displays the rsvp editing form
+*
+* @ingroup rsvp_form
+* @param $rid The id of the rsvp instance to edit.
+* @return html formatted rsvp edit form.
+*/
+function rsvp_edit_form($rid) {
+  $rsvp = db_fetch_object(_rsvp_get_rsvp($rid));
+
+  $form .= form_textfield(t('RSVP Name'),'name', $rsvp->name, 40, 40, t('This is the name of your rsvp'));
+  $form .= form_textarea(t('RSVP Message'), 'invite_text', $rsvp->invite_text, 70, 10, t('This text will be sent to the people you invite'));
+  $form .= form_checkbox(t('Hide attendees'), 'blind', 1, $rsvp->blind, t('Prevent attendees from seeing who else is on the list'));
+  $form .= form_checkbox(t('Allow list email'), 'list_email', 1, $rsvp->list_email, t('Allow attendees to email everyone on the list'));
+  $form .= form_checkbox(t('Allow attendee invites'), 'allow_invite', 1, $rsvp->allow_invite, t('Allow attendees to invite more people to the event'));
+  $form .= form_hidden("rid", $rid);
+  $form .= form_submit(t('Update RSVP'));
+  $form .= form_submit(t('Delete RSVP'));
+  return form($form);
+}
+
+/**
+* Displays the rsvp attendee editing form
+*
+* @ingroup rsvp_form
+* @param $rid The id of the rsvp instance to edit.
+* @return html formatted rsvp attendee edit form.
+*/
+function rsvp_attendee_form($rid) {
+  $form .= form_textarea(t('Add Attendees'), 'invite_list', '', 70, 5, t('Enter email addresses separated by commas'));
+  if(module_exist('contact') && user_access('create rsvp')){
+    $result = _rsvp_get_contact_searches();
+    $searches['--'] = '--';
+    while($search = db_fetch_object($result)){
+      $searches[$search->sid] = $search->name;
+    }
+    $form .= form_select(t('Contact search'), 'contact_search', '--', $searches, t('Select a saved contact search to invite'));
+  }
+  $form .= form_submit(t('Add Attendees'));
+  return form(form_group('', $form));
+}
+
+/**
+* Displays the rsvp user preferences form
+*
+* @ingroup rsvp_form
+* @return html formatted rsvp user preferences form.
+*/
+function rsvp_preferences_form() {
+  global $user;
+  $prefs = db_fetch_object(db_query('SELECT * FROM {rsvp_user_prefs} WHERE uid=\'%s\'', $user->uid));
+
+  //$form = form_checkbox(t('Email Notification'), 'notification', 1, $prefs->notification, t('Checked: turn off email notification of rsvp invitations.'));
+  $form .= form_checkbox(t('Hide response'), 'blind', 1, $prefs->blind, t('Checked: Hide your responses to rsvps from other attendees'));
+  $form .= form_checkbox(t('Require login'), 'require_login', 1, $prefs->require_login, t('Checked: Require login before changing response to rsvp invitations'));
+  $form .= form_submit(t('Update Preferences'));
+  return form($form);
+}
+
+/**
+* Displays the rsvp delete are you sure form
+*
+* @ingroup rsvp_form
+* @param $rid The id of the rsvp instance to confirm deletion for.
+* @return html formatted rsvp delete confirmation form.
+*/
+function rsvp_delete_form($rid) {
+  $rsvp = db_fetch_object(_rsvp_get_rsvp($rid));
+
+  $form = "<div class=\"rsvpform\">".t('Really delete RSVP: ').$rsvp->name."?</div>";
+  $form .= form_hidden("rid", $rid);
+  $form .= form_submit(t('Delete'));
+  $form .= form_submit(t('Cancel'));
+  return form($form);
+}
+
+/**
+* Displays the invite user confirmation form.
+*
+* @ingroup rsvp_form
+* @param $hash The hash value of the invite.
+* @return html formatted invite user confirmation form.
+*/
+function rsvp_confirm_email_form($hash) {
+  $invite = db_fetch_object(_rsvp_get_invite($hash));
+  $usermatch = db_fetch_object(_rsvp_get_user($invite->email));
+
+  $form = "<div class=\"rsvpform\">". t('We have matched your email address with the user in our system with the username: '). $usermatch->name .".<br />". t('If this is correct please enter your password and click \'Confirm\'.') ."<br />". t('If this is not you, please click \'Continue\' to view the invitation.') ."</div>";
+  $form .= form_password(t('Password'), 'pass', '', 5, 20);
+  $form .= form_hidden('name', $usermatch->name);
+  $form .= form_submit(t('Confirm'));
+  $form .= form_submit(t('Continue'));
+  return form($form);
+}
+
+/**
+* Displays the rsvp send list message form.
+*
+* @ingroup rsvp_form
+* @param $rid The id of the rsvp to send the message to.
+* @return html formatted rsvp send list message form.
+*/
+function rsvp_message_form($rid) {
+  $form .= form_textfield(t('Message Subject'), 'subject', '', 40, 40, t('This is the subject for your email message'));
+  $form .= form_textarea(t('Message Body'), 'body', '', 70, 5, t('This is the body of the email message'));
+  $form .= form_hidden('rid', $rid);
+  $form .= form_submit(t('Send Message'));
+  return form(form_group('', $form));
+}
+
+
+/**
+ * @defgroup rsvp_view functions for rsvp display.
+ */
+
+/**
+* Displays an html formatted rsvp
+*
+* @ingroup rsvp_view
+* @param $rid The id of the rsvp instance to display.
+* @return html formatted view of the requested rsvp instance.
+*/
+function rsvp_show_rsvp($rid, $options = 1) {
+  $rsvp = db_fetch_object(_rsvp_get_rsvp($rid));
+  $content = "<div class=\"rsvpbox\">";
+  $content .= "<div class=\"name\">". $rsvp->name ."</div>";
+  $content .= "<div class=\"text_header\">Invite Message:</div>";
+  $content .= "<div class=\"text\">".$rsvp->invite_text."</div>";
+  if($options){
+    $content .= "<div class=\"options\">".t('Options').":";
+    $content .= "<div class=\"blind\">-- ".($rsvp->blind==0 ? t('Attendees are visible to each other') : t('Attendees are hidden from each other') )."</div>";
+    $content .= "<div class=\"list_email\">-- ".($rsvp->list_email==0 ? t('Attendees cannot email the list') : t('Attendees can email the list') )."</div>";
+    $content .= "<div class=\"allow_invite\">-- ".($rsvp->allow_invite==0 ? t('Attendees cannot invite more people') : t('Attendees can invite more people') )."</div>";
+    $content .= "</div>";
+  }
+  $content .= "</div>";
+  return $content;
+}
+
+/**
+* Displays html formatted attendees of an rsvp instance
+*
+* @ingroup rsvp_view
+* @param $rid The rid of the rsvp instance.
+* @param $controls Boolean that disables attendee control links. Default - enabled..
+* @return html formatted view of the requested invite instance.
+*/
+function rsvp_show_attendees($rid, $controls = 1) {
+  $attendees = _rsvp_get_attendees($rid);
+  while ($attendee = db_fetch_object($attendees)) {
+    if(!_rsvp_is_attendee_hidden($attendee->uid) || user_access('administer rsvp') || _rsvp_is_owner($rid)) {
+      if($attendee->uid!=0) {
+        $name = l(drupal_specialchars($attendee->email), 'user/view/'. $attendee->uid, array('title'=>t('view user information')));
+      }
+      else {
+        $name = $attendee->email;
+      }
+      $status = l(t('status'), 'rsvp/status/'. $attendee->hash, array('title'=>t('view user invite status')));
+      $remove = l(t('remove'), 'rsvp/remove/'. $attendee->rid .'/'. $attendee->hash, array('title'=>t('remove user from rsvp')));
+      $links = array();
+      if($controls) {
+        $links[] = $status;
+        $links[] = $remove;
+        $link = $name .' - '. theme('links', $links);
+      }
+      else {
+        $link = $name;
+      }
+      if(!$attendee->invited) {
+        $notsent[] = $link;
+      }
+      switch($attendee->response) {
+        case 'none':
+            $noreply[] = $link;
+          break;
+        case 'yes':
+            $yes[] = $link;
+          break;
+        case 'no':
+            $no[] = $link;
+          break;
+        case 'maybe':
+            $maybe[] = $link;
+          break;
+      }
+    }
+  }
+
+  if(count($notsent)>0) {
+    if($controls) {
+      $form = l(t('send invites'), 'rsvp/send/'. $rid, array('title'=>t('send invititations to uninvited users')));
+    }
+    $form .= theme('item_list', $notsent);
+    $content .= "<strong>invites not sent yet</strong><br />" .  $form . "<br /><br />";
+  }
+  $content .= "<br /><br /><strong>no reply</strong>" . theme('item_list', $noreply) . "<br /><br />";
+  $content .= "<strong>attending</strong>" .  theme('item_list', $yes) . "<br /><br />";
+  $content .= "<strong>not attending</strong>" .  theme('item_list', $no) . "<br /><br />";
+  $content .= "<strong>might attend</strong>" .  theme('item_list', $maybe) . "<br /><br />";
+
+  return form_group(t('Attendees'), $content);
+}
+
+/**
+* Displays html formatted event information for an rsvp instance
+*
+* @ingroup rsvp_view
+* @param $rid The rid of the rsvp instance.
+* @return html formatted view of the requested invite instance.
+*/
+function rsvp_show_event($rid) {
+  $eid = db_fetch_object(db_query('SELECT nid FROM {rsvp} WHERE rid=\'%s\'', $rid));
+  $node = node_load(array("nid" => $eid->nid));
+  $content = "<div class=\"rsvpeventbox\">";
+  if($node) {
+    $content .= "<div class=\"title\">". $node->title;
+    $content .= " - ". date("M d,  Y", $node->start) ."</div>";
+  }
+  else {
+    $content .= "<div class=\"alert\">". t('The event associated with this event has been deleted') ."</div>";
+  }
+  $content .= "</div>";
+  return $content;
+}
+
+/**
+* Displays html formatted invite reply status information for a user's invite
+*
+* @ingroup rsvp_view
+* @param $hash The hash value of the invite.
+* @param $form default shows the reply form.
+* @param $status default shows the user status view.
+* @return html formatted view of the requested invite status.
+*/
+function rsvp_show_replystatus($hash, $form = 1, $status = 1) {
+  $invite = db_fetch_object(db_query('SELECT * FROM {rsvp_to_user} WHERE hash=\'%s\'', $hash));
+
+  $content = "<div class=\"rsvpinvitestatusbox\">";
+  if($status) {
+    $content .= "<div class=\"header\">You have responded: ";
+    $content .= "<font class=\"response". $invite->response ."\">";
+    $content .= $invite->response;
+    $content .= "</font></div>";
+  }
+  else {
+    $content .= "<div class=\"header\">". $invite->email ."</div>";
+    $content .= "<div class=\"invited\">-- ".($invite->invited==0 ? t('Attendee has not been invited') : t('Attendee has been invited') )."</div>";
+    $content .= "<div class=\"received\">-- ".($invite->received==0 ? t('Attendee has not viewed the invitation') : t('Attendee has viewed the invitation') )."</div>";
+    $content .= "<div class=\"response\">-- ". t('Attendee response: ').$invite->response ."</div>";
+  }
+
+  if($form) {
+    $content .= "<div class=\"header\">";
+    $responses = array("yes"=>"Yes", "no"=>"No", "maybe"=>"Maybe");
+    $form = form_select("Your Reply", "invite_reply", $invite->response,	$responses, t('select your response to the invitation here'));
+    $form .= form_submit("Reply");
+    $form .= form_hidden("hash", $hash);
+    $content .= form($form);
+    $content .= "</div>";
+  }
+  $content .= "</div>";
+  return $content;
+}
+
+/**
+* Displays html formatted invite status information for an invite instance
+*
+* @ingroup rsvp_view
+* @param $rid The rid of the rsvp instance.
+* @param $uid The uid of the user.
+* @param $full boolean swicth to display the administrative invited and received flags.
+* @return html formatted view of the requested invite status.
+*/
+function rsvp_show_invitestatus($rid, $uid, $full = 0) {
+  $eid = db_fetch_object(db_query('SELECT invited, received, response FROM {rsvp_to_user} WHERE rid=\'%s\' AND uid=\'%s\'', $rid, $uid));
+
+  $content = "<div class=\"rsvpinvitestatusbox\">";
+  $content .= "<div class=\"header\">You have responded: </div>";
+  $content .= "<div class=\"".$eid->response."\">";
+  $content .= $eid->response;
+  $content .= "</div>";
+  $content .= "</div>";
+  return $content;
+}
+
+
+/**
+ * @defgroup rsvp_data_functions functions for rsvp data manipulation.
+ */
+
+/**
+* Creates a new rsvp
+*
+* @ingroup rsvp_functions
+* @param $edit The post data of the create rsvp form.
+* @param $uid The uid of the rsvp owner user.
+* @return int key id of the rsvp instance or -1 on failure.
+*/
+function rsvp_create_rsvp($edit, $uid) {
+  $fields[] = 'uid';
+  $vals[] = $uid;
+
+  $fields[] = 'timestamp';
+  $vals[] = time();
+
+  foreach($edit as $key => $value){
+    if($key!='invite_list' && $key!='contact_search'){
+      $fields[] = $key;
+      $vals[] = "'". check_query($value) ."'";
+    }
+  }
+
+  if(!in_array('nid', $fields)) {
+    return -1;
+  }
+
+  $r = db_query('SELECT MAX(rid) AS max FROM {rsvp}');
+
+  if(!$max = db_fetch_object($r)) {
+    return -1;
+  }
+  $rid = ($max->max)+1;
+
+  $sql = 'INSERT INTO {rsvp} (rid, '. implode(", ", $fields) .') VALUES (\'%s\', '. implode(", ", $vals) .')';
+
+  if(db_query($sql, $rid)) {
+    return $rid;
+  }
+  else {
+    return -1;
+  }
+}
+
+/**
+* Updates an rsvp
+*
+* @ingroup rsvp_functions
+* @param $edit The post data of the update rsvp form.
+* @return boolean true on success.
+*/
+function rsvp_update_rsvp($edit) {
+
+  $fields[] = "timestamp='".time()."'";
+
+  foreach($edit as $key => $value){
+    if($key!='invite_list' && $key!='rid'){
+      $fields[] = $key."='". check_query($value) ."'";
+    }
+  }
+
+  if(!$edit['rid']) {
+    return false;
+  }
+  else {
+    $rid = $edit['rid'];
+  }
+
+  $sql = 'UPDATE {rsvp} SET '. implode(", ", $fields) .' WHERE rid=\'%s\'';
+
+  if(db_query($sql, $rid)) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+/**
+* Deletes an rsvp
+*
+* @ingroup rsvp_functions
+* @param $rid The rid of the rsvp to delete.
+* @return boolean true on success.
+*/
+function rsvp_delete_rsvp($rid) {
+  if(db_query('DELETE FROM {rsvp} WHERE rid=\'%s\'', $rid)) {
+    if(db_query('DELETE FROM {rsvp_to_user} WHERE rid=\'%s\'', $rid)){
+      return true;
+    }
+    else{
+      return false;
+    }
+  }
+  else {
+    return false;
+  }
+}
+
+/**
+* Sets attendees for an event
+*
+* @ingroup rsvp_functions
+* @param $attendees either an array or a string with comma delimited email addresses.
+* @param $rid The id of the rsvp instance.
+* @return boolean true if successful
+*/
+function rsvp_set_invites($attendees, $rid) {
+  // strip whitespace
+  $attendees = strtolower(preg_replace('/\s+/', '', $attendees));
+  // convert to array
+  $attendees = explode(",", $attendees);
+  // remove duplicates
+  $attendees = array_unique($attendees);
+
+  foreach($attendees as $key => $value) {
+    if( $value!='' ) {
+      $value = check_query($value);
+      if(!rsvp_attendee_exists($rid, $value)){
+        db_query('INSERT INTO {rsvp_to_user} (rid, email, hash, timestamp) VALUES (\'%s\', \'%s\', \'%s\', \'%s\')', $rid, $value, md5($rid.$value.time()), time());
+      }
+    }
+  }
+}
+
+/**
+* Returns all rsvps.
+*
+* @ingroup rsvp_functions
+* @return dbresultset of rsvps.
+*/
+function _rsvp_get_all_rsvps() {
+  return db_query('SELECT * FROM {rsvp}');
+}
+
+/**
+* Returns the rsvps that a user is the owner of.
+*
+* @ingroup rsvp_functions
+* @param $uid The uid of the user.
+* @return dbresultset of rsvps.
+*/
+function _rsvp_get_rsvps($uid) {
+  return db_query('SELECT * FROM {rsvp} WHERE uid=\'%s\'', $uid);
+}
+
+/**
+* Returns the rsvps for a event node that a user is the owner of.
+*
+* @ingroup rsvp_functions
+* @param $nid The id of the node.
+* @param $uid The uid of the user. Defaults to global $user->uid
+* @return dbresultset of rsvps.
+*/
+function _rsvp_get_node_rsvps($nid, $uid=0) {
+  global $user;
+  if(!$uid){
+    $uid = $user->uid;
+  }
+  return db_query('SELECT * FROM {rsvp} WHERE uid=\'%s\' AND nid=\'%s\'', $uid, $nid);
+}
+
+/**
+* Returns the invites that a user has received.
+*
+* @ingroup rsvp_functions
+* @param $uid The uid of the user.
+* @return array of event nids.
+*/
+function _rsvp_get_invites($uid) {
+  return db_query('SELECT * FROM {rsvp} r LEFT JOIN {rsvp_to_user} u ON r.rid = u.rid WHERE u.uid=\'%s\'', $uid);
+}
+
+/**
+* Returns an invite by hash value.
+*
+* @ingroup rsvp_functions
+* @param $hash The hash value of the invite.
+* @return dbresultset of the requested invite.
+*/
+function _rsvp_get_invite($hash) {
+  return db_query('SELECT * FROM {rsvp} r LEFT JOIN {rsvp_to_user} u ON r.rid = u.rid WHERE u.hash=\'%s\'', $hash);
+}
+
+/**
+* Returns the invites that a user has received for a specific event node.
+*
+* @ingroup rsvp_functions
+* @param $uid The uid of the user.
+* @param $nid The nid of the node.
+* @return array of event nids.
+*/
+function _rsvp_get_node_invites($uid, $nid) {
+  return db_query('SELECT * FROM {rsvp} r LEFT JOIN {rsvp_to_user} u ON r.rid = u.rid WHERE u.uid=\'%s\' AND r.nid=\'%s\'', $uid, $nid);
+}
+
+/**
+* Retrieves an rsvp from the database.
+*
+* @ingroup rsvp_functions
+* @param $rid The rid of the rsvp instance.
+* @return dbresultset of the requested rsvp.
+*/
+function _rsvp_get_rsvp($rid) {
+  return db_query('SELECT * FROM {rsvp} WHERE rid=\'%s\'', $rid);
+}
+
+/**
+* Returns an rsvp's attendees from the database.
+*
+* @ingroup rsvp_functions
+* @param $rid The rid of the rsvp instance.
+* @return dbresultset of the requested attendees.
+*/
+function _rsvp_get_attendees($rid) {
+  return db_query('SELECT * FROM {rsvp_to_user} WHERE rid=\'%s\'', $rid);
+}
+
+/**
+* Removes an rsvp's attendee from the database.
+*
+* @ingroup rsvp_functions
+* @param $hash The hash key value of the rsvp attendee.
+* @return boolean true if successful.
+*/
+function _rsvp_remove_attendee($hash) {
+  return db_query('DELETE FROM {rsvp_to_user} WHERE hash=\'%s\'', $hash);
+}
+
+/**
+* Checks if an email address already exists for an rsvp.
+*
+* @ingroup rsvp_functions
+* @param $rid The id of the rsvp.
+* @param $email The email to check for.
+* @return boolean true if the email exists for the rsvp.
+*/
+function rsvp_attendee_exists($rid, $email){
+  if(db_num_rows(db_query('SELECT uid FROM {rsvp_to_user} WHERE rid=\'%s\' AND email=\'%s\'', $rid, $email))>0) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+/**
+* Checks to see if a user has been invited to an event.
+*
+* @ingroup rsvp_functions
+* @param $nid The node id of the event.
+* @param $uid The uid of the user. If null, it uses global $user->uid.
+* @return boolean. True if user has been invited to the event.
+*/
+function _rsvp_is_invited($nid, $uid = null) {
+  global $user;
+  if($uid==null){
+    if($user->uid==0) {
+      return false;
+    }
+    else {
+      $uid = $user->uid;
+    }
+  }
+
+  if(db_num_rows(db_query('SELECT u.uid FROM {rsvp} r LEFT JOIN {rsvp_to_user} u ON r.rid = u.rid WHERE r.nid=\'%s\' AND u.uid=\'%s\'', $nid, $uid)) > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
+* Checks to see if an rsvp is blind has been invited to an event.
+*
+* @ingroup rsvp_functions
+* @param $rid The rid of the rsvp.
+* @return boolean. False if the rsvp is blind.
+*/
+function _rsvp_is_blind($rid) {
+  $status = db_fetch_object(db_query('SELECT blind FROM {rsvp} WHERE rid=\'%s\'', $rid));
+
+  if($status->blind == 0) {
+    return false;
+  }
+  return true;
+}
+
+/**
+* Checks to see if a user is the owner of an rsvp.
+*
+* @ingroup rsvp_functions
+* @param $rid The id of the rsvp.
+* @param $uid The uid of the user. If null, it uses global $user->uid.
+* @return boolean. True if user is the owner of an rsvp to the event.
+*/
+function _rsvp_is_owner($rid, $uid = null) {
+  global $user; 
+  if($uid==null){
+    $uid = $user->uid;
+  }
+  if(db_num_rows(db_query('SELECT uid FROM {rsvp} WHERE rid=\'%s\' AND uid=\'%s\'', $rid, $uid)) > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
+* Checks to see if a user is the owner of an rsvp for an event node.
+*
+* @ingroup rsvp_functions
+* @param $nid The id of the event node.
+* @param $uid The uid of the user. If null, it uses global $user->uid.
+* @return boolean. True if user is the owner of an rsvp to the event.
+*/
+function _rsvp_has_rsvps($nid, $uid = null) {
+  global $user;
+  if($uid==null){
+    $uid = $user->uid;
+  }
+  if(db_num_rows(db_query('SELECT uid FROM {rsvp} WHERE nid=\'%s\' AND uid=\'%s\'', $nid, $uid)) > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
+* Checks to see if a user has set thier blind preference flag.
+*
+* @ingroup rsvp_functions.
+* @param $uid The uid of the user.
+* @return boolean. True if user is hidden.
+*/
+function _rsvp_is_attendee_hidden($uid) {
+  if($uid==0) {
+    return false;
+  }
+  $blind = db_fetch_object(db_query('SELECT blind FROM {rsvp_user_prefs} WHERE uid=\'%s\'', $uid));
+
+  if( $blind->blind ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+* Checks to see if an rsvp has enabled attendee invite sending.
+*
+* @ingroup rsvp_functions.
+* @param $rid The id of the rsvp.
+* @return boolean. True if rsvp allows attendee invite sending.
+*/
+function _rsvp_is_invite_viral($rid) {
+  $viral = db_fetch_object(db_query('SELECT allow_invite FROM {rsvp} WHERE rid=\'%s\'', $rid));
+
+  return $viral->allow_invite;
+}
+
+/**
+* Checks to see if an rsvp has enabled attendee list message sending.
+*
+* @ingroup rsvp_functions.
+* @param $rid The id of the rsvp.
+* @return boolean. True if rsvp allows attendee list message sending.
+*/
+function _rsvp_is_invite_message_enabled($rid) {
+  $enabled = db_fetch_object(db_query('SELECT list_email FROM {rsvp} WHERE rid=\'%s\'', $rid));
+
+  return $enabled->list_email;
+}
+
+/**
+* Checks to see if an invite has been confirmed by a user.
+*
+* @ingroup rsvp_functions.
+* @param $hash The hash of the invite.
+* @return boolean. True if invite is confirmed.
+*/
+function _rsvp_is_invite_confirmed($hash) {
+  $confirmed = db_fetch_object(db_query('SELECT uid FROM {rsvp_to_user} WHERE hash=\'%s\'', $hash));
+
+  return $confirmed->uid;
+}
+
+/**
+* Checks to see if an invite is permitted to set the reply.
+* This depends on whether or not the invite is being accessed by a logged in user,
+* whether the invite has a confirmed user,
+* and whether or not the confirmed user has set thier require_login rsvp preference to true.
+*
+* @ingroup rsvp_functions.
+* @param $hash The hash value of the invite.
+* @return boolean. True if the invite's reply is accesible by the current user/preferences.
+*/
+function _rsvp_allow_reply($hash) {
+  global $user;
+  $uid = $user->uid;
+  $confirmed = db_fetch_object(db_query('SELECT uid FROM {rsvp_to_user} WHERE hash=\'%s\'', $hash));
+
+  if($confirmed->uid) {
+    if($uid!=0) {
+      // user is logged in
+      if($uid==$confirmed->uid) {
+        return true;
+      }
+      return false;
+    }
+    else {
+      // anonymous user, get require_login preference
+      $require_login = db_fetch_object(db_query('SELECT require_login FROM {rsvp_user_prefs} WHERE uid=\'%s\'', $confirmed->uid));
+      if($require_login->require_login) {
+        return false;
+      }
+      return true;
+    }
+  }
+  else {
+    return true;
+  }
+}
+
+/**
+* Checks to see if an invite email address matches with an email in the user table.
+*
+* @ingroup rsvp_functions.
+* @param $hash The hash value of the invite.
+* @return user object if the invite's email matches with an entry in the user table. null if not.
+*/
+function _rsvp_check_user_email($hash) {
+  $email = db_fetch_object(db_query('SELECT email FROM {rsvp_to_user} WHERE hash=\'%s\'', $hash));
+  if(db_num_rows(db_query('SELECT uid FROM {users} WHERE mail=\'%s\'', $email->email)) > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
+* Checks the owner status of an invite.
+* Returns false if the invite is confirmed and the logged in user is not the owner,
+* or if the invite is not confirmed, and the logged in user's email does not match that of the invite.
+*
+* @ingroup rsvp_functions
+* @param $hash The hash value of the invite.
+* @param $uid The uid of the user. If null, it uses global $user->uid.
+* @return boolean. False if the invite is confirmed and the user is not the owner,
+* or if the invite is not confirmed, and the user's email does not match that of the invite.
+*/
+function _rsvp_check_invite_owner_status($hash, $uid=null) {
+  global $user;
+
+  if($uid==null) {
+    $uid = $user->uid;
+  }
+  if($uid==0) {
+    return true;
+  }
+
+  if(_rsvp_is_invite_confirmed($hash)) {
+    if(db_num_rows(db_query('SELECT uid FROM {rsvp_to_user} WHERE uid=\'%s\' AND hash=\'%s\'', $uid, $hash)) > 0) {
+      return true;
+    }
+  }
+  else {
+    if(db_num_rows(db_query('SELECT uid FROM {rsvp_to_user} WHERE email=\'%s\' AND hash=\'%s\'', $user->mail, $hash)) > 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
+/**
+* Returns a user by email from the user table.
+*
+* @ingroup rsvp_functions
+* @param $email The email of the user.
+* @return dbresultset of the requested user.
+*/
+function _rsvp_get_user($email) {
+  return db_query('SELECT * FROM {users} WHERE mail=\'%s\'', $email);
+}
+
+/**
+* Sets the uid value of an invite.
+*
+* @ingroup rsvp_functions
+* @param $hash The hash value of the invite to set.
+* @param $uid The uid value to set. If null, it use the uid of the curently logged in user.
+* @return dbresultset of the requested user.
+*/
+function _rsvp_set_user($hash, $uid=null) {
+  global $user;
+  if($uid==null) {
+    $uid = $user->uid;
+  }
+  db_query('UPDATE {rsvp_to_user} SET uid=\'%s\' WHERE hash=\'%s\'', $uid, $hash);
+}
+
+/**
+* Returns the dbresultset .
+*
+* @ingroup rsvp_functions.
+* @param $uid The uid of the user.
+* @return dbresultset. of th requested user.
+*/
+function _rsvp_get_owner($uid) {
+  return db_query('SELECT * FROM {users} WHERE uid=\'%s\'', $uid);
+}
+
+/**
+* Sets an invite reply status.
+*
+* @ingroup rsvp_functions
+* @param $edit The post data of the invite reply form.
+* @return boolean true if successful.
+*/
+function _rsvp_set_reply($edit) {
+  return db_query('UPDATE {rsvp_to_user} SET response=\'%s\', invited=\'1\', received=\'1\' WHERE hash=\'%s\'', $edit['invite_reply'], $edit['hash']);
+}
+
+/**
+* Sets an invite received status.
+*
+* @ingroup rsvp_functions
+* @param $hash The hash value of the invite.
+* @param $value the value to set received status to. Defaults to 1 (true).
+* @return boolean true if successful.
+*/
+function _rsvp_set_recieved($hash, $value=1) {
+  return db_query('UPDATE {rsvp_to_user} SET invited=\'1\', received=\'%s\' WHERE hash=\'%s\'', $value, $hash);
+}
+
+/**
+* Sets an invite invited status.
+*
+* @ingroup rsvp_functions
+* @param $hash The hash value of the invite.
+* @param $value the value to set invited status to. Defaults to 1 (true).
+* @return boolean true if successful.
+*/
+function _rsvp_set_invited($hash, $value=1) {
+  return db_query('UPDATE {rsvp_to_user} SET invited=\'%s\' WHERE hash=\'%s\'', $value, $hash);
+}
+
+/**
+* Returns a dbresultset of saved contact.module searches.
+*
+* @ingroup rsvp_functions
+* @return dbresultset of saved contact searches.
+*/
+function _rsvp_get_contact_searches() {
+  $type = 'search';
+  //return db_query('SELECT name, sid FROM {contact_search} WHERE type = \'%s\' ORDER BY name', $type);
+}
+
+/**
+* Returns contact emails from a saved contact.module search.
+*
+* @param $sid The id of the contact search.
+* @ingroup rsvp_functions
+* @return string with a comma delimited list of contact emails.
+*/
+function _rsvp_get_contacts($sid) {
+	//$search = db_fetch_array(db_query('SELECT edit FROM {contact_search} WHERE sid=\'%s\'', $sid));
+ //  $search = unserialize($search['edit']);
+//   foreach($search['sources'] as $key=>$value) {
+//     $keys[] = 's.csid=\'%s\'';
+//     $sids[] = $value;
+//   }
+//  $result = db_query('SELECT DISTINCT c.mail FROM {contact} c LEFT JOIN {contact_source} s ON s.nid = c.nid WHERE ('. implode(' OR ', $keys ) .') AND (mail_preference!=\'optout\')', $sids);
+  // while($email = db_fetch_object($result)) {
+//     $emails .= $email->mail.",";
+//   }
+  return $emails;
+}
+
+/**
+* Returns a hash value of a user's invite.
+*
+* @ingroup rsvp_functions
+* @param $uid The uid of the user.
+* @param $rid The id of the rsvp.
+* @return string with hash value of invite.
+*/
+function _rsvp_get_hash($uid, $rid) {
+  $result = db_fetch_object(db_query('SELECT hash FROM {rsvp_to_user} WHERE rid=\'%s\' AND uid=\'%s\'', $rid, $uid));
+  return $result->hash;
+}
+
+/**
+* Returns a hash value of a user's invite.
+*
+* @ingroup rsvp_functions
+* @param $uid The uid of the user.
+* @param $rid The id of the rsvp.
+* @return string with hash value of invite.
+*/
+function _rsvp_set_preferences($edit) {
+  global $user;
+  if(db_num_rows(db_query('SELECT uid FROM {rsvp_user_prefs} WHERE uid=\'%s\'', $user->uid)) > 0) {
+    foreach($edit as $key => $value){
+        $fields[] = $key."='". $value ."'";
+    }
+    $sql = 'UPDATE {rsvp_user_prefs} SET '. implode(", ", $fields) .' WHERE uid=\'%s\'';
+    db_query($sql, $user->uid);
+  }
+  else {
+    $fields[] = 'uid';
+    $vals[] = "'". $user->uid ."'";
+    foreach($edit as $key => $value){
+        $fields[] = $key;
+        $vals[] = "'". check_query($value) ."'";
+    }
+    $sql = 'INSERT INTO {rsvp_user_prefs} ('. implode(", ", $fields) .') VALUES ('. implode(", ", $vals) .')';
+    db_query($sql);
+  }
+}
+
+
+/**
+ * @defgroup rsvp_mail functions for rsvp mailing.
+ */
+
+/**
+* Emails the invite to the attendees of an rsvp instance.
+*
+* @ingroup rsvp_mail
+* @param $rid The rid of the rsvp.
+* @param $confirm if true returns themed item_list of recipients and sending status. default: false.
+* @param $resend if true resends invite only to reciepients with received flag not set. default: false.
+* @return string of formatted recipients, or empty string depending on $confirm.
+*/
+function _rsvp_mail_rsvp($rid, $confirm=0, $resend=0) {
+  $attendees = _rsvp_get_attendees($rid);
+  while($attendee = db_fetch_object($attendees)) {
+    if(!($resend && $attendee->received) && !($attendee->invited)) {
+      $invite = db_fetch_object(_rsvp_get_invite($attendee->hash));
+      if(_rsvp_mail($invite)) {
+        _rsvp_set_invited($attendee->hash);
+        if($confirm) {
+          $success[] = $invite->email;
+        }
+      }
+      else {
+        if($confirm) {
+          $failed[] = $invite->email;
+        }
+      }
+    }
+  }
+  if($confirm) {
+    if(count($failed)>0){
+      $list = "<div class=\"rsvpbox\">";
+      $list .= t('Failed sending email to these recipients:');
+      $list .= theme('item_list', $failed);
+      $list .= "</div>";
+    }
+    if(count($success)>0){
+      $list .= "<div class=\"rsvpbox\">";
+      $list .= t('Successfully sent email to these recipients:');
+      $list .= theme('item_list', $success);
+      $list .= "</div>";
+    }
+  }
+  return $list;
+}
+
+/**
+* Emails a message to the attendees of an rsvp instance.
+*
+* @ingroup rsvp_mail
+* @param $edit The send message form post data.
+* @param $confirm if true returns themed item_list of recipients and sending status. default: false.
+* @return string of formatted recipients, or empty string depending on $confirm.
+*/
+function _rsvp_message_rsvp($edit, $confirm=0) {
+  global $user;
+  $site = variable_get("site_name", "drupal");
+  $webmaster = variable_get("site_mail", "");
+  if($webmaster) {
+    $webmaster = "-f".$webmaster;
+  }
+  $from = $user->name .' <'. $user->mail .'>';
+  $subject = $site ." - ". $edit['subject'];
+
+  $attendees = _rsvp_get_attendees($edit['rid']);
+  while($attendee = db_fetch_object($attendees)) {
+    $invite = db_fetch_object(_rsvp_get_invite($attendee->hash));
+
+    $body = strtr("Hello!\n\nYou have been sent a message by %sender at %site.\n\nYou can view the invitation from where it originated by following this link: \n%url", array('%sender'=>$user->name, '%site'=>$site, '%url'=>url("rsvp/email/$invite->hash", NULL, NULL, 1))) ."\n\nHere is the message:\n". $edit['body'];
+
+    $to = "$attendee->mail <". $attendee->mail .'>';
+    if(mail($to, $subject, $body, "From: $from\nReply-to: $from\nX-Mailer: Drupal (rsvp.module)\nReturn-path: <$from>\nErrors-to: $from\n",$webmaster)) {
+      if($confirm) {
+        $success[] = $invite->email;
+      }
+    }
+    else {
+      if($confirm) {
+        $failed[] = $invite->email;
+      }
+    }
+  }
+  if($confirm) {
+    if(count($failed)>0){
+      $list = "<div class=\"rsvpbox\">";
+      $list .= t('Failed sending email to these recipients:');
+      $list .= theme('item_list', $failed);
+      $list .= "</div>";
+    }
+    if(count($success)>0){
+      $list .= "<div class=\"rsvpbox\">";
+      $list .= t('Successfully sent email to these recipients:');
+      $list .= theme('item_list', $success);
+      $list .= "</div>";
+    }
+  }
+  return $list;
+}
+
+/**
+* Sends an email.
+*
+* @ingroup rsvp_mail
+* @param $invite The invite object to send the mail with.
+* @return boolean. True if mail is successfully sent.
+*/
+function _rsvp_mail($invite) {
+  global $user;
+  $site = variable_get("site_name", "drupal");
+  $webmaster = variable_get("site_mail", "");
+  if($webmaster) {
+    $webmaster = "-f".$webmaster;
+  }
+  $from = $user->name .' <'. $user->mail .'>';
+  $subject = $site ." - ". t('Event Invitation');
+  $to = "$invite->email <". $invite->email .'>';
+  $body = strtr("Hello!\n\nYou have been invited to attend an event by %owner at %site.\n\nYou can view the full invitation by following this link: \n%url", array('%owner'=>$user->name, '%site'=>$site, '%url'=>url("rsvp/email/$invite->hash", NULL, NULL, 1))) ."\n\nHere is the invitation message:\n$invite->invite_text";
+
+  return mail($to, $subject, $body, "From: $from\nReply-to: $from\nX-Mailer: Drupal (rsvp.module)\nReturn-path: <$from>\nErrors-to: $from\n",$webmaster);
+}
+?>

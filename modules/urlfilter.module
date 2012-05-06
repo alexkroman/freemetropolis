@@ -1,0 +1,31 @@
+<?php
+// $Id: urlfilter.module,v 1.1 2004/08/23 01:24:58 alex Exp $
+
+function urlfilter_help($section) {
+  switch ($section) {
+    case 'admin/system/modules#description':
+      return t("Automatically turns web and email addresses into clickable links.");
+  }
+}
+
+function urlfilter_filter($op, $text = "") {
+  switch ($op) {
+    case "name":
+      return t("URL Filter");
+    case "settings":
+      return form_group(t("URL Filter"), t("URL Filter is enabled. This means that web and email addresses will automatically be converted into (clickable) links."));
+    case "process":
+      $text = " " . $text . " ";
+      $text = preg_replace("<([ \n\r\t\(])((http://|https://|ftp:\//|mailto:)([a-zA-Z0-9@:%_~#?&=.,/;-]*[a-zA-Z0-9@:%_~#&=/;-]))([.,?]?)(?=[ \n\r\t\)])>i", '\1<a href="\2">\2</a>\5', $text);
+      $text = preg_replace("<([ \n\r\t\(])([A-Za-z0-9._-]+@[A-Za-z0-9._-]+\.[A-Za-z]{2,4})([.,]?)(?=[ \n\r\t\)])>i", '\1<a href="mailto:\2">\2</a>\3', $text);
+      $text = preg_replace("<([ \n\r\t\(])(www\.[a-zA-Z0-9@:%_~#?&=.,/;-]*[a-zA-Z0-9@:%_~#\&=/;-])([.,?]?)(?=[ \n\r\t\)])>i", '\1<a href="http://\2">\2</a>\3', $text);
+      $text = substr($text, 1, -1);
+      return $text;
+    default:
+      return $text;
+  }
+  return $text;
+}
+
+
+?>

@@ -1,0 +1,755 @@
+<?php
+
+function place_help($section) {
+    switch ($section) {
+    case 'admin/system/modules#description':
+        return t('Define different places');
+    case 'node/add#place-bar':
+        return t('Add a Bar');
+    case 'node/add#place-restaurant':
+        return t('Add a Restaurant');
+    }
+}
+
+function place_node_name($node) {
+	switch (is_string($node) ? $node : $node->type) {
+    case "place-bar":
+        return t("bar");
+    case "place-restaurant":
+        return t("restaurant");
+	case "place-shop":
+		return t("shop");
+	case "place-outdoor":
+		return t("outdoors");
+	case "place-other":
+		return t("other");
+	default:
+        return t("place");
+	}
+}
+
+function place_node_types($node) {
+    return array("place-bar", "place-restaurant",'place-shop','place-outdoor','place-other');
+}
+
+function place_access($op, &$node) {
+  global $user;
+    
+  switch ($op) {
+    case 'view':
+      return $node->status;
+    case 'create':
+      return user_access('maintain places');
+  case 'update':
+	  return user_access('maintain places');
+    case 'delete':
+      return $user->uid == $node->uid && user_access('administer nodes');
+  }
+}
+function place_link($type, $node = 0, $main) {
+    $links = array();
+    switch ($type) {
+	case 'system':
+	if (user_access('maintain places')) {
+        menu("node/add/place/bar", t("bar", array("bar" => t('bar'))), "place_page", 0, 1);
+        menu("node/add/place/restaurant", t("restaurant", array("restaurant" => t('restaurant'))), "place_page", 0, 1);
+		menu("node/add/place/shop", t("shop", array("shop" => t('shop'))), "place_page", 0, 1);
+		menu("node/add/place/outdoor", t("public-space", array("public-space" => t('public-space'))), "place_page", 0, 1);
+		menu("node/add/place/other", t("other", array("other" => t('other'))), "place_page", 0, 1);
+	}
+	if (user_access('access content')) {
+		  menu('place', t('place'), 'place_page', 0, 1);
+	}
+   
+    break;
+    }
+    return $links ? $links : array();
+}
+
+
+function place_insert($node) {
+	global $user;
+	
+	db_query("INSERT INTO {place} (nid, type, address, city, state, zipcode, phone, cross_street, hours, website, good_points, bad_points) VALUES (%d, '%s', '%s','%s','%s', %d, '%s','%s','%s','%s','%s','%s')",$node->nid, $node->type, $node->address, $node->city, $node->state, $node->zipcode, $node->phone, $node->cross_street, $node->hours, $node->website, $node->good_points, $node->bad_points );
+	
+	if (!empty($node->body)) {
+		$shadow_nid = $node->nid;
+		$node->nid = db_next_id('{node}_nid');
+		db_query("INSERT INTO {node} (nid, type, title, uid, body,created, comment) VALUES (%d, '%s', '%s', %d,'%s','%s','%d')", $node->nid, 'blog',$node->title, $user->uid, $node->body, time(),2);
+		db_query("INSERT INTO {shadowlog} (nid, shadow_nid, recommended, rating,public, start, image) VALUES (%d,%d,%d,%d,%d,%d,'%s')",$node->nid, $shadow_nid,$node->recommended, $node->rating,1,$node->start,$node->image);
+	}
+}
+
+function place_update($node) {
+	global $user;
+	
+	db_query("UPDATE {place} SET address = '%s', city = '%s', state = '%s', zipcode = %d, phone = '%s', cross_street = '%s', hours = '%s', website = '%s', good_points = '%s', bad_points = '%s' WHERE nid = %d", $node->address, $node->city, $node->state, $node->zipcode, $node->phone, $node->cross_street, $node->hours, $node->website, $node->good_points, $node->bad_points, $node->nid);
+	
+	if (!empty($node->body)) {
+		$shadow_nid = $node->nid;
+		$node->nid = db_next_id('{node}_nid');
+		db_query("INSERT INTO {node} (nid, type, title, uid, body,created, comment) VALUES (%d, '%s', '%s', %d,'%s','%s','%d')", $node->nid, 'blog',$node->title, $user->uid, $node->body, time(),2);
+		db_query("INSERT INTO {shadowlog} (nid, shadow_nid, recommended, rating,public, start, image) VALUES (%d,%d,%d,%d,%d,%d,'%s')",$node->nid, $shadow_nid,$node->recommended, $node->rating,1,$node->start,$node->image);
+	}
+	
+}
+
+function place_user_recommend($nid) 
+{
+	global $user;
+	$result = db_query("select * from place_recommend WHERE uid = %d AND nid = %d and type = 'recommend'", $user->uid, $nid);
+	if (db_num_rows($result) > 0) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+function place_user_attend($nid) 
+{
+	global $user;
+	$result = db_query("select * from place_recommend WHERE uid = %d AND nid = %d and type = 'attend'", $user->uid, $nid);
+	if (db_num_rows($result) > 0) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+function place_page() 
+{
+	global $base_url, $user;
+	$type = null;
+	
+	$type = arg(1);
+	if ($type != 'event' && !empty($type)) {
+		$type = 'place-' . $type;
+	}
+	
+	switch ($type) {
+	case 'place-bar':
+	default:
+		$display = 'bar, club, cafe';
+		break;
+	case 'place-restaurant':
+		$display = 'restaurant';
+		break;
+	case 'place-shop':
+		$display = 'shop';
+		break;
+	case 'place-outdoor':
+		$display = 'outdoors';
+		break;
+	case 'place-other':
+		$display = 'other';
+		break;
+	case 'event':
+		$display = 'events';
+		break;
+	}
+	
+	
+		$breadcrumbs[] = l('home', "");
+		$breadcrumbs[] = l('places',"?q=place");
+		if (arg(1) == 'bar' || arg(1) == '') {
+			$bar_active = 'class="current"';
+		}
+		elseif (arg(1) == 'restaurant') {
+			$restaurant_active = 'class="current"';
+		}
+		elseif (arg(1) == 'shop') {
+			$shop_active = 'class="current"';
+		}
+		elseif (arg(1) == 'outdoor') {
+			$outdoor_active = 'class="current"';
+		}
+		elseif (arg(1) == 'other') {
+			$other_active = 'class="current"';
+		}
+		$output .= "Click the tabs to browse bars, restaurants, shops, outdoors, and other.<br /><br />";
+		
+		$output .= '<div id="Tabs"><li><a href="?q=place/bar" title="View all bars, clubs, and cafes" ' . $bar_active . ' >Bars, Clubs, Cafes</a></li>';
+		$output .= '<li><a href="?q=place/restaurant" ' . $restaurant_active . '>Restaurants</a></li>';
+		$output .= '<li><a href="?q=place/shop" ' . $shop_active . '>Shops</a></li>';
+		$output .= '<li><a href="?q=place/outdoor" ' . $outdoor_active . '>Outdoors</a></li>';
+		$output .= '<li><a href="?q=place/other" ' . $other_active . '>Other</a></li>';
+		$output .= "</div>";
+		$output .= '<div style="align:left;border:1px solid #a2ae86;margin-right:10px;">';
+		$output .= '<table width=\"100%\" border="0"><tr><td width="70%">';
+		$output .= taxonomy_browser_overview();
+		$output .= '</td><td align="right" nowrap>';
+
+		
+		$output .= '<br /><br /><br /><div style="border: 1px dashed #000;align:center;padding:5px;"><a href="?q=node/add/place-' . arg(1) . '"><font size="4">add ' . $display . '</font></a></div><br /><br />';
+		$output .= '</tr></table>';
+		$output .= "</div><br />";
+	
+
+		$breadcrumbs[] = l($display,'place/' . arg(1));
+	
+	print theme("page", $output, arg(1), $breadcrumbs);
+	return;
+}
+
+function place_list($result, $title = NULL) {
+  while ($node = db_fetch_object($result)) {
+	  $nodes[] = l($node->title, "node/view/$node->nid");
+  }
+  if (is_array($nodes)) {
+	  $nodes = implode(", ", $nodes);
+  }
+  
+  return $nodes;
+}
+
+function place_title_list($type, $dbrows) {
+  /* valid dbfields: totalcount, daycount, timestamp */
+	if ($type == 'event') {
+		$result = db_query("SELECT s.nid, n.title, u.uid, u.name FROM node_counter s INNER JOIN node n ON s.nid = n.nid INNER JOIN {users} u ON n.uid = u.uid INNER JOIN event e ON e.nid = n.nid WHERE e.start > " . time() . " AND n.type = '$type' AND n.status = 1 ORDER BY s.totalcount DESC LIMIT 10");
+	}
+	else {
+		$result = db_query("SELECT s.nid, n.title, u.uid, u.name FROM node_counter s INNER JOIN node n ON s.nid = n.nid INNER JOIN {users} u ON n.uid = u.uid WHERE n.type = '$type' AND n.status = 1 ORDER BY s.totalcount DESC LIMIT 10");
+	}
+	
+	return $result;
+}
+
+function place_display_landing($vocabularies) 
+{
+	$output = "<table cellpadding=\"". variable_get("taxonomy_html_overview_cellpad", 8). "\">";
+		$cellwidth = round(100 / variable_get("taxonomy_html_overview_columns", 2)). "%";  
+		for ($n = 0; $n < count($vocabularies); $n++) {      
+			if ($n % variable_get("taxonomy_html_overview_columns", 2) == 0) {
+				$output .= "<tr>";
+			}  
+			$output .= "<td width=\"$cellwidth\" valign=\"top\">". taxonomy_html_vocab_horiz($vocabularies[$n], $type). "</td>";
+			if ($n % variable_get("taxonomy_html_overview_columns", 2) == variable_get("taxonomy_html_overview_columns", 2)-1) {
+				$output .= "</tr>";
+			}
+		}
+		$output .= "</table>";	
+		return $output;
+}
+
+
+// return array of vocabularies, as objects
+function taxonomy_get_place_vocabularies($type = '', $key = "vid") {
+	if ($type) {
+		$result = db_query("SELECT * FROM {vocabulary} WHERE nodes LIKE '%%%s%%' ORDER BY weight, name", $type);
+	}
+	else {
+		$result = db_query("SELECT * FROM {vocabulary} ORDER BY weight, name");
+	}
+	$vocabularies = array();
+	while ($voc = db_fetch_object($result)) {
+		$vocabularies[$voc->$key] = $voc;
+	}
+
+	return $vocabularies;
+}
+
+
+function taxonomy_html_get_vocabularies($type = NULL) {
+	$allvocabularies = taxonomy_get_place_vocabularies($type);
+
+  
+  $omitted = variable_get("taxonomy_html_overview_vocab", array()); //omit undesired vocabularies from listing  
+  foreach($omitted as $val) {
+    unset($allvocabularies[$val]);
+  }
+  $allvocabularies = array_merge(array(), $allvocabularies);
+
+  return $allvocabularies;
+}  
+
+function taxonomy_html_vocab_horiz($vocabulary, $type) {
+  global $tree;
+  if (arg(1) == 'bar') {
+	  $type = '/place-bar';
+	  
+  }
+  elseif (arg(1) == 'restaurant'){
+	  $type = '/place-restaurant';
+  }
+
+  elseif (arg(1) == 'shop') {
+	  $type = '/place-shop';
+  }
+  elseif (arg(1) == 'outdoor') {
+	  $type = '/place-outdoor';
+  }
+  elseif (arg(1) == 'other') {
+	  $type = '/place-other';
+  }
+ 
+  elseif (arg(1) =='event') {
+	  $type = '/event';
+  }
+    
+  $lastdepth = 0;  
+  $tree = taxonomy_get_tree($vocabulary->vid);
+  $header .= "<h2>$vocabulary->name</h2>";
+  $type_count = str_replace("/",'',$type);
+  
+  foreach ($tree as $term) {
+	  $term->count = taxonomy_term_count_nodes($term->tid, $type_count);    
+    if ($type == "feed") {
+		$link = ", " . l(strtolower($term->name) ." (". $term->count .")", "taxonomy/feed/and/". $term->tid, array("title" => format_plural($term->count, "item", "items"))) . "$term->depth, ";
+    }
+    else {
+      if ($term->count){
+		  $link = ", " . l(strtolower($term->name), "taxonomy/page/and/". $term->tid . $type, array("title" => format_plural($term->count, "item", "items"))) . " ($term->count) ";
+      }
+      else {
+		  $link = ", ".strtolower($term->name)."";
+      }
+    }
+    if ($term->depth > $lastdepth) {
+      $output .= "<ul>";
+    }  
+    elseif ($term->depth < $lastdepth) {
+      $numoful = ($lastdepth-$term->depth);
+      $output .= str_repeat("</ul>\n", $numoful);
+    }
+
+    $output .= $link;
+	
+	
+    $lastdepth = $term->depth;
+  }
+  $output = substr($output, 2); //trim leading comma and space
+  $output = $header. $output. "\n\r";
+  return $output;
+}
+
+function taxonomy_html_link($type, $node) {
+  if ($type == "admin" && user_access("administer taxonomy")) {
+    $links[] = l(t("taxonomy_html"), "admin/taxonomy_html");
+  }
+  if ($type == "page") {
+    $text = t(variable_get("taxonomy_html_overview_title", "Categories"));
+    $text[0] = strtolower($text[0]);
+    
+    $links[] = l(t($text), "taxonomy_html");
+  }
+  return $links;
+}  
+
+
+
+function place_search($keys) {
+    $query = "";
+	$keys = addslashes($keys);
+	$result = db_query_range("SELECT DISTINCT(n.nid), n.*, p.* FROM {place} p INNER JOIN {node} n ON n.nid = p.nid 
+LEFT JOIN {term_node} tn ON n.nid = tn.nid 
+LEFT JOIN {term_data} td ON tn.tid = td.tid 
+LEFT JOIN {term_synonym} ts ON tn.tid = ts.tid 
+WHERE (p.type LIKE '%$keys%' OR p.address LIKE '%$keys%' OR p.city LIKE '%$keys%' OR p.zipcode LIKE '%$keys%' OR p.phone LIKE '%$keys%' OR p.cross_street LIKE '%$keys%' OR p.website LIKE '%$keys%' OR p.good_points LIKE '%$keys%' OR p.bad_points LIKE '%$keys%' OR n.title LIKE '%$keys%' OR n.body LIKE '%$keys%' OR n.teaser LIKE '%$keys%' ". $query ." OR td.name LIKE '%$keys%' OR ts.name LIKE '%k$keys' OR td.description LIKE '%$keys%') ORDER BY n.changed DESC", 0, 20);
+	while ($search = db_fetch_object($result)) {
+		$find[] = array("title" => check_output($search->title), "link" => (strstr(request_uri(), "admin") ? url("admin/node/edit/id/$search->nid") : url("node/view/$search->nid")), "user" => $search->name, "date" => $search->timestamp);
+	}
+	$bars =  array(t('bars'), $find);
+
+	return $bars;
+	
+}
+
+function getMapQuest($street, $city, $state, $zip, $link = '') 
+{ 
+//Store the original address 
+	$Address = array( 'street' => $street 
+					  , 'city'=> $city 
+					  , 'state'=> $state 
+					  , 'zip'=> $zip 
+		); 
+//Initialize local variables. 
+	$Mlink = "";//Return value
+//Strip periods, commas, leading, and tailing spaces from street, city, 
+	$street = trim($street); 
+	$street = str_replace('.','',$street); 
+	$street = str_replace(',','',$street); 
+	$street = str_replace(' ','+',$street); 
+	$city = trim($city); 
+	$city = str_replace('.','',$city); 
+	$city = str_replace(',','',$city); 
+	$city = str_replace(' ','+',$city); 
+	$zip = trim($zip); 
+	$state = trim($state); 
+//Compine the given data into a url that will link to mapquest 
+
+	$Mlink = "http://www.mapquest.com/maps/map.adp?country=US&amp;countryid=US&amp;addtohistory=&amp;searchtype=address&amp;address==" . 
+		$street . "&amp;city=" . $city . "+&amp;state=" . $state . "&amp;Zip=" . 
+		$zip . "&amp;Find+Map.x=0&amp;Find+Map.y=0";
+	return $Mlink; 
+} 
+
+function place_list_view($taxonomy_types, $output = '') 
+{
+		$header = array(
+				array("data" => t("title"), "field" => "n.title", "width" => "400"),
+				array("data" => t("rating"), "field" => "p.score", "align" => 'center'),
+				array("data" => t("comments"), "field" => "num_comments", "align" => 'right', "width"=> '20')
+				);
+
+			while ($taxonomy_type_row = db_fetch_object($taxonomy_types)) {
+				$terms = taxonomy_link("taxonomy terms", $taxonomy_type_row);
+				$terms2 = get_the_term_id($taxonomy_type_row);
+				$title = '';
+				$title .= "<br />recommended by: alex";
+				
+				$go = true;
+					  
+					if (!empty($taxonomy_type_row->phone)) {
+						$title .= "<br /><strong>" . $taxonomy_type_row->phone . "</strong>";
+					}
+	  
+					if (!empty($taxonomy_type_row->address)) {
+						$title .= "<br />" . $taxonomy_type_row->address . " " . $taxonomy_type_row->city . " " . $taxonomy_type_row->zipcode;
+						$maplink = getMapQuest($taxonomy_type_row->address, $taxonomy_type_row->city, 'OR', $taxonomy_type_row->zipcode);
+						$title .= " (<a href=\"$maplink\">map</a>)";
+					}
+	
+		 
+					if (sizeof($terms) > 1) {
+						$title .= $the_terms = '<br /><br /><strong>categories:</strong> ' . strtolower(implode(", ",$terms));
+					}
+		  
+					$rows[] = array(array("data" => l($taxonomy_type_row->title, 'node/view/' . $taxonomy_type_row->nid) . $title, "class" => "content"), array("data" => number_format($taxonomy_type_row->score,1) . '<br /><em>' . (($taxonomy_type_row->votes) ? $taxonomy_type_row->votes  . " votes" : '') . "</em>", "class" => "author"), array("data" => $taxonomy_type_row->num_comments));
+		  
+				
+		  
+			}
+
+			$output .= theme("table", $header, $rows, array('width' => '95%'));
+			return $output;
+			
+
+	
+}
+
+function place_view(&$node, $main = 0, $page = 0, $fromblog = 0) {
+	global $user;
+
+	$terms = taxonomy_link("taxonomy terms", $node);
+	
+	if ($node->start) {
+		$output .= "<h2>" . format_date($node->start, "large") . "</h2>";
+	}
+	
+	if (!empty($node->location_nid)) {
+		$the_place = db_query("select * from {node} n INNER JOIN {place} p ON n.nid = p.nid WHERE n.nid = %d",$node->location_nid);
+		$the_place = db_fetch_object($the_place);
+		$node->address = $the_place->address;
+		$node->place_title = $the_place->title;
+		$node->city = $the_place->city;
+		$node->state = $the_place->state;
+		$node->zipcode = $the_place->zipcode;
+		$node->phone = $the_place->phone;
+		$node->website = $the_place->website;
+		$node->cross_street = $the_place->cross_street;
+		$node->place_nid = $the_place->nid;
+	}
+	if (!empty($the_place->title)) {
+		$the_title .= " @ " . $the_place->title;
+	}
+	
+	$output .= "<h2 class=\"title\">" . check_output(strtoupper($node->title) . $the_title) .  "</h2>";
+
+	$output .= "<table width=\"90%\"><tr><td style=\"margin:0px;padding:0px;\" width=\"270\">\n";
+	$maplink = getMapQuest($node->address, $node->city, 'OR', $node->zipcode);
+	
+	if (!empty($node->place_title)) {
+		$output .= "<br />\n" . l("<font size=\"2\">" . $node->place_title . '</font>', "node/view/$node->place_nid") . "<br />\n";
+	}
+	else {
+		$node->place_nid = $node->nid;
+	}
+	
+	if (!empty($node->address)) {
+		$output .= "<span class=\"heading3\">address:</span><br />\n";
+        $output .= $node->address . "<br />";
+	}
+	
+	$output .= $node->city;
+	if (!empty($node->city) && !empty($node->state)) {
+        $output .= ", " . $node->state;
+	}
+	if ($node->zipcode != 0) {
+		$output .= " " . $node->zipcode . "<br />\n";
+	}
+	else {
+		$output .= "<br />";
+	}
+		if (!empty($maplink) && $node->address) {
+		$output .= "<a href=\"$maplink\">map and directions</a>\n";
+	}
+
+	if (!empty($node->website)) {
+		$output .= "<br /><a href=\"$node->website\">website</a>\n";
+	}
+
+	if (!empty($node->phone)) {
+        $output .= "<br /><br /><span class=\"heading3\">phone:</span><br /> " . $node->phone . "<br />\n";
+    }
+
+	if (!empty($node->cross_street)) {
+		$output .= "<br /><span class=\"heading3\">cross street:</span><br /> $node->cross_street <br />\n";
+	}
+
+	if (!empty($node->hours)) {
+		$output .= "<br /><span class=\"heading3\">hours:</span><br /> $node->hours <br />\n";
+	}
+	
+	if ($fromblog == 0) {
+		$output .= "</td>";
+		$output .= "<td valign=\"top\" style=\"padding-right:20px\">\n<div class=\"address\" style=\"border:1px dotted #000; padding:5px;\">\n";
+		$output .=  "<img src=\"images/dot_line_short.gif\" width=\"95%\" height=\"2\" alt=\"\" />\n";
+		$output .= l("<font size=\"3\"><strong>blog this</strong></font>", "node/edit/$node->nid") . "\n<br />\n";
+		$output .=  "<img src=\"images/dot_line_short.gif\" width=\"95%\" height=\"2\" alt=\"\" />\n";
+		//$output .= l("view changes", "node/revisions/$node->nid") .
+		//"<br />";
+		
+		if ($node->type != 'event') {
+			$output .= l("add an event here", "node/add/event/$node->nid") . "<br />\n";
+		}
+		else {
+			$output .= l('invite friends',"rsvp/create/$node->nid");
+		}
+		//$output .=  "<img src=\"images/dot_line_short.gif\" width=\"95%\" height=\"2\" alt=\"\" />\n<br />\n";
+		//$output .= l('send to friend',"emailpage&amp;nid=$node->nid");
+			
+	$output .= "</div>\n\n";
+	}
+	$output .="</td>\n</tr>\n</table>\n";
+	
+	
+	$output .= "<br /><span class=\"heading3\">categories: </span><br />";
+	$output .= $the_terms = strtolower(implode(", ",$terms));
+	
+	$upcoming_events = get_events($node->nid);
+	if (!empty($upcoming_events)) {
+			$output .= "<br /><br /><span class=\"heading3\">upcoming events:</span><br />";
+			$output .= $upcoming_events;
+	}
+		
+	$nearby = place_get_nearby($node->zipcode, $node->nid);
+	if ($nearby) {
+		$output .= "<br /><br /><span class=\"heading3\">in the neighborhood:</span><br />";
+		$output .= $nearby;
+		
+	}
+
+
+	if ($fromblog == 0 && $_POST['op'] != 'Preview') {
+		$output .= display_journals($node->nid);
+		$output .= '<br />' . l('<img src="images/icon_xml2.gif" border="0" alt="RSS Feed" />',"crss/$node->nid");
+		
+	}
+	if ($_POST['op'] == 'Preview') {
+		$output .= "<br /><img src=\"misc/dotline_long.jpg\" alt=\"--\" />";
+		$output .= "by " . format_name($node) . " on " . format_date($node->created);
+		$output .= "<br /><br />" . check_output($node->body);
+		$output .= "<br /><img src=\"misc/dotline_long.jpg\" alt=\"--\" />";
+	}
+	
+	if ($_SESSION['breadcrumbs']) {
+		foreach ($_SESSION['breadcrumbs'] as $the_crumb) {
+			$breadcrumb[] = $the_crumb;
+		}
+		$breadcrumb[] = l($node->title,request_uri());
+	}
+	else {
+		$breadcrumb[] = l('home','');
+		$breadcrumb[] = l('places','');
+		$breadcrumb[] = $node->title;
+	}
+		
+	drupal_set_breadcrumb($breadcrumb);
+	$node->body =  $output;
+	
+	if ($fromblog == 0) {
+		return theme('node_place', $node, $main, $page);
+	}
+	else {
+		return $node->body;
+	}
+	
+}
+
+function get_recommended($nid) 
+{
+	$result = db_query("select * from {shadowlog} INNER JOIN {node} ON shadowlog.nid = node.nid WHERE shadow_nid = %d AND recommended = 1", $nid);
+	while ($row = db_fetch_object($result)) {
+		$user = user_load(array('uid' => $row->uid));
+		$users[] = l($user->name, "user/view/$user->uid");
+	}
+	if (is_array($users)) {
+		$output = implode(",", $users);
+	}
+	
+	return $output;
+}
+
+
+function display_journals($nid) 
+{
+	if (empty($nid)) return false;
+	$result = get_journals($nid);
+	
+	if (db_num_rows($result) ) {
+		$output .= "<br /><img src=\"misc/dotline_long.jpg\" alt=\"--\" />";
+	}
+	while ($node = db_fetch_object($result)) {
+		$output .= blog_view(node_load(array("nid" => $node->nid)), 1,0,0);
+	}
+	
+
+	return $output;
+}
+
+function get_journals($nid) 
+{
+	return $result = db_query("select n.nid from {node} n INNER JOIN {shadowlog} s ON n.nid = s.nid WHERE s.shadow_nid = $nid AND n.status = 1 ORDER BY n.nid DESC");
+}
+
+
+
+function get_events($nid) 
+{
+		
+	$time = time()-(2*60*60);
+	$limit = 10;
+	if (empty($nid)) $nid = 0;
+	
+	$result = db_query_range("SELECT n.nid, n.title, n.status, n.moderate, e.start as start FROM {node} n INNER JOIN {event} e on n.nid = e.nid WHERE e.location_nid = $nid AND n.type='event' AND n.status = 1 AND n.moderate = 0 AND e.start >= $time ORDER BY e.start",0,$limit);
+	while ($result_row = db_fetch_object($result)) {
+		$output .= l($result_row->title, "node/view/$result_row->nid") . ' - ' . format_date($result_row->start) . "<br />";
+	}
+	return $output;
+}
+
+
+function get_referrer($nid) 
+{
+	$query = "SELECT url, MAX(timestamp) AS last_view, COUNT(url) AS count FROM {accesslog} WHERE nid = $nid AND url NOT LIKE '%". check_query($_SERVER["HTTP_HOST"]) ."%' AND url <> '' GROUP BY url";
+	$result = db_query($query);
+	while ($result_row = db_fetch_object($result)) {
+		$output = l(substr($result_row->url,0,75),$result_row->url) . "<br />";
+	}
+	return $output;
+}
+
+
+function place_perm() {
+  return array('maintain places');
+}
+
+
+function place_get_nearby($zipcode, $nid) {
+	if ($zipcode == 0) return false;
+	
+	$cache = cache_get("nearby:$zipcode");
+	if (!empty($cache)) {
+		return $cache->data;
+	}
+    $get_starting_zip = db_fetch_object(db_query("SELECT latitude, longitude from zips where zipcode = %d", $zipcode));
+    if (is_numeric($get_starting_zip->latitude) && is_numeric($get_starting_zip->longitude)) {
+        $zipcodes = db_query ("
+SELECT  place.nid, title,  place.zipcode , ROUND( (
+ACOS( (
+SIN( RADIANS( $get_starting_zip->latitude  )  )  * SIN( RADIANS( latitude )  )  )  + ( COS( RADIANS( $get_starting_zip->latitude  )  )  * COS( RADIANS( latitude )  )  * COS( RADIANS( $get_starting_zip->longitude  )  - RADIANS( longitude )  )  )  ) 
+) *3963, 1
+) AS distance
+FROM zips, place,node
+WHERE node.nid = place.nid AND place.nid != $nid AND zips.zipcode = place.zipcode AND (
+ACOS( (
+SIN( RADIANS( $get_starting_zip->latitude  )  )  * SIN( RADIANS( latitude )  )  )  + ( COS( RADIANS( $get_starting_zip->latitude )  )  * COS( RADIANS( latitude )  )  * COS( RADIANS( $get_starting_zip->longitude )  - RADIANS( longitude )  )  ) 
+)
+) *3963 <=5
+ORDER  BY distance limit 5");
+    }
+    while ($nearby = db_fetch_object($zipcodes)) {
+        $output .= l($nearby->title, "node/view/" . $nearby->nid) . "<br />";
+    }
+	cache_set("nearby:$zipcode", $output, 1);
+    return $output;
+}
+
+
+function place_load(&$node) {
+	$place = db_fetch_object(db_query("SELECT * from {place} WHERE nid = %d", $node->nid));
+	return $place;
+}
+
+function place_form(&$node, &$error) {
+	if ($_POST[op] == 'Preview') {
+		$node->body = $node->body;
+	}
+	else {
+		$node->body = null;
+	}
+	
+	$output .= "<strong>Submission tips:</strong><br />";
+	$output .= '
+Hi there.  The whole point of this site is sharing stores so I\'m glad you finally made it here.  Here are some tips to get you going:
+<br /><br />';
+	
+	if (arg(1) == 'add') {
+		$output .= 'You are adding a new place. Please search the site to make sure you are not adding a location that already exists.';
+	}
+	else {
+		$output .= 'You are blogging an existing location.  Make sure to read the previous entries for this location (if any).  
+New blogs should add something new, something that hasn\'t already been discussed.<br /><br />
+Also, try clicking on the link below and adding any information we are missing for this location.
+';
+	}
+	
+	$output .= "<br /><br />";
+	
+	$output .= "<script language=\"JavaScript\" type=\"text/javascript\">
+ function toggleFilterControls(id) {
+   you = document.getElementById(id);
+   if (you.style.display == 'none') {
+       you.style.display = 'inline';
+   } else {
+     you.style.display = 'none';
+}
+}
+</script>";
+	if (arg(1) == 'edit') {
+		$output .= '<a href="#" onClick="toggleFilterControls(\'the_form\'); return false;">Click here to change start time and to add / change categories</a>';
+		$output .= '<span id="the_form" style="display: none;">';
+	}
+	
+	if (module_exist('taxonomy')) {
+        $output .= implode('', taxonomy_node_form($node->type, $node));
+    } 
+	$output .= "<table width=\"100%\"><tr><td>";
+	
+    $output .= form_textfield(t('Address'),'address', $node->address, 60, 70, '');
+    $output .= form_textfield(t('City'),'city', $node->city, 60, 64, '');
+    $output .= form_textfield(t('State'),'state', $node->state, 2, 64, '');
+    $output .= form_textfield(t('Zipcode'),'zipcode', $node->zipcode, 5, 5 , '');
+    $output .= form_textfield(t('Phone'),'phone', $node->phone, 60, 64, '');
+	$output .= "</td><td>";
+	
+	$output .= form_textfield(t('Cross Street'),'cross_street', $node->cross_street, 60, 64, '');
+	$output .= form_textfield(t('Hours'),'hours', $node->hours, 60, 64, '');
+    $output .= form_textfield(t('Website'),'website', $node->website, 60, 64, 'include the http://');
+	$output .= "</td></tr></table>";
+	if (arg(1) == 'edit') {
+		$output .= "</span>";
+	}
+		
+	$output .= form_textarea(t('Entry'), 'body', $node->body, 60, 15, '');
+	$output .= "you can use html in your entries to make them look pretty.<br /><br />";
+	$output .= 'for instance: &lt;strong&gt;<span style="font-weight: bold;">bold</span>&lt;/strong&gt;,
+&lt;em&gt;<span style="font-style: italic;">italics</span>&lt;/em&gt;,
+&lt;ul&gt;<span style="text-decoration: underline;">underline</span>&lt;/ul&gt;<br /><br />';
+	
+	
+    return $output;
+}
+?>

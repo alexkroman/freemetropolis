@@ -1,0 +1,26 @@
+/* $Id: print.css,v 1.1.1.1 2004/07/24 19:09:44 alex Exp $ */
+
+body {
+  margin: 1em;
+  background-color: #fff;
+}
+th {
+  text-align: left;
+  color: #006;
+  border-bottom: 1px solid #ccc;
+}
+tr.dark {
+  background-color: #ddd;
+}
+tr.light {
+  background-color: #fff;
+}
+td {
+  padding: 5px;
+}
+#menu {
+  visibility: hidden;
+}
+#main {
+  margin: 1em;
+}

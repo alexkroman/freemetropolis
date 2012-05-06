@@ -1,0 +1,165 @@
+<!-- BEGIN: header --><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>{head_title}</title>
+{head}
+<meta name="description" content="{mission}" />
+<meta name="keywords" content="portland, hawthorne, belmont, music, punk, blog, diary, events, listings, citysearch" />
+<meta name="rating" content="General" />
+<meta name="ROBOTS" content="All" />
+<meta name="revisit-after" content="1 day" />
+<meta name="ICBM" content="45.52361, -122.675" />
+<link rel="stylesheet" type="text/css" href="css/text.css" />
+<link rel="stylesheet" type="text/css" href="css/layout.css" />
+<link rel="alternate" type="application/rss+xml" title="RSS" href="http://www.freemetropolis.com/portland/?q=blog/feed" />
+<style type="text/css">
+#dot-line-rt {
+	position:absolute; left:757px; top:4px; width:22px;  height:AUTO; background-image: url({base_url}/images/dot-line-rt.gif);
+}
+#maincontent-container {
+	position:absolute;left:169px; top:114px; width:581px; height:AUTO; border-left: 6px solid #A2AE86; border-bottom: 1px solid #86B0D2; border-right: 1px solid #86B0D2; z-index:1; background:url({base_url}/images/main_content_bkg.gif);
+}
+</style>
+<script type="text/JavaScript" src="css/rollover.js"></script>
+</head>
+<body {onload_attributes} onload="MM_preloadImages('images/nav_search-over.gif','images/nav_home-over.gif','images/nav_places-over.gif','images/nav_events-over.gif','images/nav_people-over.gif','images/nav_blog-over.gif','images/nav_help-over.gif')">
+<div class="hide">
+    <a href="#content" title="Skip the site navigation to go directly to the content">Skip to content</a> --- Welcome to Free Metropolis
+</div>
+<div id="layout-top">
+	<img src="images/layout_top.gif" width="801" height="4" alt="" />
+</div>
+	<div id="freemetrop-title">
+		<a href="{base_url}"><img src="images/freemetrop_title.gif" width="280" height="34" alt="" /></a>
+	</div>
+	<div id="title-rt">
+		<img src="images/title_rt.gif" width="7" height="78" alt="" />
+	</div>
+	<div id="banner-ad-area" class="bodytext"><!-- insert add--></div>
+	<div id="dot-line-rt">
+		<img src="images/dot-line-rt.gif" width="22" height="596" alt="" />
+	</div>
+	<div id="layout-far-rt-bar">
+		<img src="images/layout_far_rt_bar.gif" width="22" height="596" alt="" />
+	</div>
+	<div id="city-name" class="city">Portland
+	</div>
+	<div id="primary-nav-blk-line-top">
+		<img src="images/primary_nav_blk_line_top.gif" width="757" height="1" alt="" />
+	</div>
+<form method="post" action="?q=taxonomy/poge/and/0">
+	<div id="search-box" style="background-image: url(images/search_box.gif);">
+		<input type="text" id="keys" name="keys" value="" size="18" alt="{search_description}" />
+	</div>
+<div id="primary-nav">
+		<input type="image" src="images/nav_search.gif" title="Search" alt="Search" name="search" /><img src="images/primary_nav_spacer_lft.gif" width="6" height="31" alt="" /><a href="?q="><img id="hormenu1L1" onmouseover="MM_swapImage('home','','images/nav_home-over.gif',1);" onmouseout="MM_swapImgRestore();" name="home" height="31" src="images/nav_home.gif"  alt="" /></a><a href="?q=place/bar"><img id="hormenu1L2" onmouseover="MM_swapImage('bars','','images/nav_places-over.gif',1);" onmouseout="MM_swapImgRestore();" name="bars" height="31" src="images/nav_places.gif" alt="" /></a><a href="?q=taxonomy/page/and/0/event"><img id="hormenu1L110" onmouseover="MM_swapImage('events','','images/nav_events-over.gif',1);" onmouseout="MM_swapImgRestore();" name="events" height="31" src="images/nav_events.gif" alt="" /></a><a href="?q=members"><img id="hormenu1L58" onmouseover="MM_swapImage('restaurants','','images/nav_people1-over.gif',1);" onmouseout="MM_swapImgRestore();" name="restaurants" height="31" src="images/nav_people1.gif" alt="" /></a><a href="?q=blog"><img id="hormenu1L133" onmouseover="MM_swapImage('forum','','images/nav_blog-over.gif',1);" onmouseout="MM_swapImgRestore();" name="forum" height="31" src="images/nav_blog.gif"  alt="" /></a><a href="?q=help"><img id="hormenu1L134" onmouseover="MM_swapImage('help','','images/nav_help-over.gif',1);" onmouseout="MM_swapImgRestore();" name="help" height="31" src="images/nav_help.gif"  alt="" /></a><img src="images/nav_blank.gif" alt="" width="181" /><img src="images/primary_nav_rt.gif" width="8" height="31" alt="" />
+</div>
+</form>
+<!-- End Preload Script -->
+
+<!-- BEGIN: search_box -->
+<!-- END: search_box -->
+<!-- BEGIN: blocks -->
+<div id="secondary-navigation">
+	{blocks}
+	<br />
+	<a href="?q=blog/feed"><img src="images/icon_xml2.gif" border="0" alt="Syndicate this Site" /></a>
+	<br />
+<!--WEBBOT bot="HTMLMarkup" startspan ALT="Site Meter" -->
+<script type="text/javascript" language="JavaScript">var site="sm7freemetropolis"</script>
+<script type="text/javascript" language="JavaScript1.2" src="http://sm7.sitemeter.com/js/counter.js?site=sm7freemetropolis">
+</script>
+<noscript>
+<a href="http://sm7.sitemeter.com/stats.asp?site=sm7freemetropolis" target="_top">
+<img border="0" src="http://sm7.sitemeter.com/meter.asp?site=sm7freemetropolis" alt="Site Meter" /></a>
+</noscript>
+<!-- Copyright (c)2002 Site Meter -->
+<!--WEBBOT bot="HTMLMarkup" Endspan -->
+</div>
+<!-- END: blocks -->  
+<div id="maincontent-container">
+<div id="holder">
+<!-- BEGIN: mission -->
+<!-- END: mission -->
+<!-- BEGIN: title -->
+<div id="main-content-bread">
+<span class="trail">
+{breadcrumb}
+<br />
+</span>
+</div>
+<a name="content"></a>
+<img src="misc/dotline_long.jpg"  alt="---------------------------------" />
+
+<!-- END: title -->
+<!-- BEGIN: help -->
+<div id="help">{help}</div>
+<!-- END: help -->
+<!-- BEGIN: message -->
+<div class="message {type}">{message}</div>
+<!-- END: message -->
+<!-- END: header -->
+
+<!-- BEGIN: node -->
+<!-- BEGIN: avatar -->
+<!-- END: avatar -->
+<!-- BEGIN: title -->
+<span class="heading1">{title}</span>
+<!-- END: title -->
+<p class="bodytext">{submitted}</p>
+<!-- BEGIN: taxonomy -->
+
+<!-- END: taxonomy -->
+<p class="bodytext">{content}</p>
+<!-- BEGIN: links -->
+<div class="links">&raquo; {links}</div>
+<!-- END: links -->
+<br /><br />
+<!-- END: node -->
+
+<!-- BEGIN: comment -->
+<table border="0" width="100%">
+	<tr>
+		<td width="5">&nbsp;</td>
+		<td width="120" class="blog">
+			<!-- BEGIN: avatar -->
+			{avatar}
+			<!-- END: avatar -->
+		</td>
+		<td>
+			{name} {submitted}
+		</td>
+	</tr>
+	<tr
+		<td>&nbsp;</td>
+		<td colspan="2">
+			{content}
+			<br /><br />
+		<div align="right">{links}<!-- BEGIN: new --> <span class="new"> {new}</span><!-- END: new --></div>
+		</td>
+	</tr>
+</td>
+</table>
+<!-- BEGIN: links -->
+<!-- END: links -->
+	<div style="border: 1px dashed #ccc"></div>
+	<br />
+<!-- END: comment -->
+<!-- BEGIN: box -->
+<h2 class="title">{title}</h2>
+<div class="content">{content}</div>
+<!-- END: box -->
+<!-- BEGIN: block -->
+{content}
+<!-- END: block -->
+<!-- BEGIN: footer -->
+</div>
+</div>
+</body>
+</html>
+<!-- main -->
+<!-- BEGIN: blocks -->
+<!-- END: blocks -->
+<!-- BEGIN: message -->
+<!-- END: message -->
+<!-- END: footer -->

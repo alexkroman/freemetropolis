@@ -1,0 +1,105 @@
+-- $Id: project.mysql,v 1.1 2004/08/11 05:18:50 alex Exp $
+
+--
+-- Table structure for table 'project_projects'
+--
+
+CREATE TABLE project_projects (
+  nid int(10) unsigned NOT NULL default '0',
+  uri varchar(50) NOT NULL default '',
+  homepage varchar(255) NOT NULL default '',
+  changelog varchar(255) NOT NULL default '',
+  cvs varchar(255) NOT NULL default '',
+  demo varchar(255) NOT NULL default '',
+  release_directory varchar(255) NOT NULL default '',
+  issues tinyint(4) NOT NULL default '0',
+  components text,
+  version int(10) unsigned NOT NULL default '0',
+  mail varchar(255) not null default '',
+  mail_digest varchar(255) not null default '',
+  mail_copy varchar(255) not null default '',
+  mail_copy_filter varchar(255) not null default '',
+  mail_reminder tinyint(4) NOT NULL default '0',
+  PRIMARY KEY (`nid`),
+  KEY project_projects_uri (uri(8))
+) TYPE=MyISAM;
+ALTER TABLE project_projects ADD help text;
+ALTER TABLE project_projects ADD screenshots varchar(255) not null default '';
+ALTER TABLE project_projects ADD documentation varchar(255) not null default '';
+ALTER TABLE project_projects ADD license varchar(255) not null default '';
+
+--
+-- Table structure for table 'project_releases'
+--
+
+CREATE TABLE project_releases (
+  rid int(10) unsigned NOT NULL default '0',
+  nid int(10) unsigned NOT NULL default '0',
+  fid int(10) unsigned NOT NULL default '0',
+  path varchar(255) NOT NULL default '',
+  created int(10) unsigned NOT NULL default '0',
+  version varchar(255) NOT NULL default '',
+  changes text,
+  weight tinyint(3) unsigned NOT NULL default '0',
+  changed int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY (`rid`),
+  KEY project_releases_nid (nid)
+) TYPE=MyISAM;
+ALTER TABLE project_releases ADD status tinyint(1) unsigned NOT NULL default '1';
+
+--
+-- Table structure for table 'project_issues'
+--
+
+CREATE TABLE project_issues (
+  nid int(10) unsigned NOT NULL default '0',
+  pid int(10) unsigned NOT NULL default '0',
+  fid int(10) unsigned NOT NULL default '0',
+  category varchar(255) NOT NULL default '',
+  component varchar(255) NOT NULL default '',
+  priority tinyint(3) unsigned NOT NULL default '0',
+  rid int(10) unsigned NOT NULL default '0',
+  assigned int(10) unsigned NOT NULL default '0',
+  state tinyint(3) unsigned NOT NULL default '0',
+  PRIMARY KEY (`nid`),
+  KEY project_issues_pid (pid)
+) TYPE=MyISAM;
+
+ALTER TABLE project_issues DROP fid;
+ALTER TABLE project_issues ADD file_path varchar(255) NOT NULL default '';
+ALTER TABLE project_issues ADD file_mime varchar(255) NOT NULL default '';
+ALTER TABLE project_issues ADD file_size int NOT NULL default 0;
+
+--
+-- Table structure for table 'project_comments'
+--
+
+CREATE TABLE project_comments (
+  cid int(10) unsigned NOT NULL default '0',
+  nid int(10) unsigned NOT NULL default '0',
+  uid int(10) unsigned NOT NULL default '0',
+  fid int(10) unsigned NOT NULL default '0',
+  name varchar(255) NOT NULL default '',
+  created int(10) unsigned NOT NULL default '0',
+  changed int(10) unsigned NOT NULL default '0',
+  body blob,
+  data blob,
+  PRIMARY KEY (`cid`),
+  KEY project_comments_nid (nid)
+) TYPE=MyISAM;
+
+ALTER TABLE project_comments DROP fid;
+ALTER TABLE project_comments ADD file_path varchar(255) NOT NULL default '';
+ALTER TABLE project_comments ADD file_mime varchar(255) NOT NULL default '';
+ALTER TABLE project_comments ADD file_size int NOT NULL default 0;
+
+--
+-- Table structure for table 'project_subscriptions'
+--
+
+CREATE TABLE project_subscriptions (
+  nid int(10) unsigned NOT NULL default '0',
+  uid int(10) unsigned NOT NULL default '0',
+  level tinyint(3) unsigned NOT NULL default '0',
+  KEY project_subscriptions_nid_uid_level (nid, uid, level)
+) TYPE=MyISAM;

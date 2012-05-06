@@ -1,0 +1,25 @@
+CHANGELOG, last updated 2004-03-02
+
+This document contains the changelog for
+SmartyPants-PHP, a "quote educator" library
+based on John Gruber's SmartyPants plug-in.
+
+-------------------------------------------------------------------------------
+
+1.4.1-php-r2    2004-03-02    changed $tags_to_skip to define()d value
+                              to avoid scope problems (in calling SmartyPants()
+                              from inside a function)
+
+                              changed $VERSION to define()d value to avoid
+                              namespace collisions with other libraries
+
+                              added test to have SmartyPonts and EducateQuotes
+                              functions return immediately if $text is empty
+
+                              added link to Smarty output filter for 
+                              SmartyPants-PHP to README
+
+                              Thanks to Joe Stump <http://www.jcssolutions.com> 
+                              for the feedback and Smarty output filter.
+
+1.4.1-php       2004-02-21    initial release

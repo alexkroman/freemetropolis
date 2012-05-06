@@ -1,0 +1,174 @@
+<?php
+
+function summary_link($type, $node = 0, $main = 0) {
+  if ($type == "system") {
+    menu("summary", "summary", "summary_page", 0, MENU_HIDE);
+  }
+}
+
+function summary_get_img($node, $type, $format){
+  if(module_exist("node_image")){
+    return node_image_get_image($node, $type, $format);
+  }
+  else{
+    return "";
+  }
+}
+
+function summary_block($op = "list", $delta = 0){
+  if ($op == "list") {
+    $blocks[0]["info"] = t("Latest Postings");
+  }
+  elseif (user_access("access content")) {
+    $result = db_query("SELECT DISTINCT type FROM {node} ORDER BY type");
+    // build list of types
+    //   (If we do this in the same loop with node and variable
+    //   lookups, the mysql cursor seems to lose its place. There
+    //   might be a cleaner way around this)
+    while ($node = db_fetch_object($result)) {
+      $types[] = $node->type;
+    }
+    foreach ($types as $type) {
+      if(variable_get("summary_show_" . $type,0)){
+        $content .= variable_get("summary_" . $type . "_title", "Recent " . ucfirst($type) . "s");
+        $result = summary_get_nodes($type, variable_get("summary_" . $type, 0));
+        $content .= node_title_list($result, "");
+      }
+    }
+    $blocks["subject"] = t(variable_get("summary_block_title", "Latest Postings"));
+    $blocks["content"] = $content;
+  }
+  return $blocks;
+}
+
+function summary_get_vocab_terms() {
+  $vid = variable_get("summary_vocab_id", 0);
+  if(!$vid || ($vid == 0) || !(module_exist("taxonomy_context"))){
+    return;
+  }
+  $terms = summary_vocab_first_child_terms($vid);
+  foreach($terms as $term){
+    $links = array();
+    if (user_access("administer taxonomy")) {
+       $links[] = l(t("administer"), "admin/taxonomy/edit/term/$term->tid", array("title" => t("Administer this term.")));
+    }
+    if(module_exist("node_image") && user_access("create node and term images")){
+      if(!node_image_file_exists($term->tid,"term","full")){
+        $links[] = l(t("add images"), "node_image/add/term/$term->tid", array("title" => t("Add images for this term.")));
+      }
+      else{
+        $links[] = l(t("replace images"), "node_image/add/term/$term->tid", array("title" => t("Replace images for this term.")));
+      }
+    }
+    $term->links = $links;
+    $term->image = summary_get_img($term, "term", "summ");
+    $term->body = taxonomy_context_get_teaser($term->body);
+    $output .= theme("taxonomy_context_subterm", $term);
+  }
+  return $output;
+}
+
+function summary_vocab_first_child_terms($vid) {
+  $terms = array();
+  $result = db_query("SELECT n.tid,n.name AS title,n.description AS body FROM {term_hierarchy} t, {term_data} n WHERE t.tid = n.tid AND n.vid = ".$vid." AND t.parent = 0 ORDER BY n.weight, n.name");
+  while ($term = db_fetch_object($result)) {
+    $terms[] = $term;
+  }
+  return $terms;
+}
+
+function summary_get_nodes($type, $limit = 6) {
+  return db_query("SELECT nid, type, title, teaser"
+            . " FROM {node}"
+            . " WHERE type='$type' AND status = '1'"
+            . " ORDER BY static DESC, created DESC"
+            . " LIMIT $limit");
+}
+
+function summary_page() {
+
+  $op = $_POST["op"];
+  $edit = $_POST["edit"];
+
+  if (user_access("access content")) {
+
+    /* main node */
+    $img = variable_get("summary_image", 0);
+    if(file_exists($img)){
+      $img = "<img class=\"node-image\" src=\"$img\" align=\"right\"/>";
+    }
+    else{
+      $img = "";
+    }
+    $output .= "<p>" . $img . variable_get("summary_text", "") . "</p>";;
+    if (variable_get("summary_vocab_id", 0)) {
+      $output .= "<div class=\"node\">";
+      $output .= summary_get_vocab_terms();
+      $output .= "</div>";
+    }
+
+    if (variable_get("summary_show_main_nodes", 0)) {
+      $output .= "<h1>" . t("Recent postings") . "</h1>";
+      $output .= node_page_default();
+    }
+    print theme("page", $output, variable_get("site_name", "Home"));
+
+  } // if access content
+  else {
+    $output = theme("box", t("Access denied"),  message_access());
+    theme("page", $output, t("Access denied"));
+  }
+
+}
+
+
+function summary_help($section = "admin/help#home") {
+  $output = "";
+
+  switch ($section) {
+    case 'admin/system/modules/home':
+      $output = t("The summary module creates a home page with a number of options for text, image, and link display.");
+      break;
+    case 'admin/system/modules#description':
+      $output = t("The summary module creates a home page with a number of options for text, image, and link display.");
+      break;
+  }
+
+  return $output;
+}
+
+function summary_settings() {
+
+  $output = form_textarea(t("Page text"), "summary_text", variable_get("summary_text", ""), 60, 10, t("Text on main page"));
+  $output .= form_textfield(t("Image"), "summary_image", variable_get("summary_image", ""), 30, 150, t("Path to image file to be displayed with front page text"));
+  $vocabs = array(0 => "none");
+  if(module_exist("taxonomy_context")){
+    $vocabularies = taxonomy_get_vocabularies();
+    foreach ($vocabularies as $vocabulary) {
+      $vocabs[$vocabulary->vid] = t($vocabulary->name);
+    }
+    $output .= form_select("Vocabulary to show terms from", "summary_vocab_id", variable_get("summary_vocab_id", 1), $vocabs, t("ID of Vocabulary that you wish to list the top-level parent terms from.  Select \"none\" if you do not wish to show terms."));
+  }
+  else{
+    $output .= t("Install module \"taxonomy context\" to display main term links on home page.") . "<br />";
+  }
+  $output .= form_select("Show main nodes", "summary_show_main_nodes", variable_get("summary_show_main_nodes", ""), array(t("Disabled"), t("Enabled")), "Print summaries of the articles set to display on home page.");
+  $result = db_query("SELECT DISTINCT type FROM {node} ORDER BY type");
+  $output .= form_textfield("Title for summary block", "summary_block_title", variable_get("summary_block_title", ""), 30, 150, "The title that will be displayed at the top of the block");
+  while ($node = db_fetch_object($result)) {
+    $type = $node->type;
+    $output .= "<hr />";
+    $output .= "<b>" . ucfirst($type) . "s Settings</b><br />";
+    $output .= form_select("List $type postings", "summary_show_$type", variable_get("summary_show_$type", 0), array(t("Disabled"), t("Enabled")), "Show recent $type postings.");
+    $output .= form_select(t("Number of $type nodes on block"), 
+                   "summary_$type", variable_get("summary_$type", 6), 
+                   array(1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 =>  5, 6 => 6, 
+                         7 => 7, 8 => 8, 9 => 9, 10 => 10, 15 => 15, 
+                         20 => 20, 25 => 25, 30 => 30), 
+                   t("The number of $type headlines to display on block."));
+    $output .= form_textfield(t($type . " title"), "summary_" . $type . "_title", variable_get("summary_" . $type . "_title", "Recent " . ucfirst($type) . "s"), 30, 150, t("Heading/title for listing of recent " . $type . " postings."));
+  }
+  return $output;
+}
+
+?>
